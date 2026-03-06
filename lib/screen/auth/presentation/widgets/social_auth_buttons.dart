@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// One-tap social login: Google, Apple, Facebook (touch-friendly).
+/// One-tap social login with Google.
 class SocialAuthButtons extends StatelessWidget {
   final VoidCallback? onGooglePressed;
   final VoidCallback? onApplePressed;
@@ -20,26 +20,10 @@ class SocialAuthButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Row(
-          children: [
-            Expanded(child: _SocialButton(
-              label: 'Google',
-              icon: Icons.g_mobiledata_rounded,
-              onPressed: onGooglePressed,
-            )),
-            const SizedBox(width: 12),
-            Expanded(child: _SocialButton(
-              label: 'Apple',
-              icon: Icons.apple,
-              onPressed: onApplePressed,
-            )),
-            const SizedBox(width: 12),
-            Expanded(child: _SocialButton(
-              label: 'Facebook',
-              icon: Icons.facebook_rounded,
-              onPressed: onFacebookPressed,
-            )),
-          ],
+        _SocialButton(
+          label: 'Continue with Google',
+          icon: Icons.g_mobiledata_rounded,
+          onPressed: onGooglePressed,
         ),
       ],
     );

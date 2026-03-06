@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:coview/screen/auth/data/auth_methods.dart';
 import '../../../../core/models/user_model.dart';
 import 'login_event.dart';
@@ -7,20 +8,47 @@ import 'login_state.dart';
 
 class LoginBloc extends Bloc<LoginEvent, LoginState> {
   LoginBloc() : super(const LoginState()) {
+    on<LoginInitialized>(_onInitialized);
     on<EmailChanged>(_onEmailChanged);
     on<PasswordChanged>(_onPasswordChanged);
     on<PasswordVisibilityToggled>(_onPasswordVisibilityToggled);
     on<RememberMeChanged>(_onRememberMeChanged);
     on<LoginButtonPressed>(_onLoginButtonPressed);
     on<GuestLoginRequested>(_onGuestLoginRequested);
-      on<GoogleLoginRequested>(_onGoogleLoginRequested);
+    on<GoogleLoginRequested>(_onGoogleLoginRequested);
+    add(const LoginInitialized());
   }
+
   final AuthMethods _authMethods = AuthMethods();
 
 
   static final _emailRegex = RegExp(
     r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
   );
+
+  static const _prefsRememberKey = 'login_remember_me';
+  static const _prefsEmailKey = 'login_saved_email';
+
+  Future<void> _onInitialized(
+    LoginInitialized event,
+    Emitter<LoginState> emit,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final remember = prefs.getBool(_prefsRememberKey) ?? false;
+      final savedEmail = prefs.getString(_prefsEmailKey) ?? '';
+      final isValid = _emailRegex.hasMatch(savedEmail);
+      emit(
+        state.copyWith(
+          email: remember ? savedEmail : state.email,
+          isEmailValid: remember ? isValid : state.isEmailValid,
+          rememberMe: remember,
+        ),
+      );
+    } catch (_) {
+      // Ignore local storage errors
+    }
+  }
 
   void _onEmailChanged(EmailChanged event, Emitter<LoginState> emit) {
     final isValid = _emailRegex.hasMatch(event.value);
@@ -51,6 +79,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
 
   void _onRememberMeChanged(RememberMeChanged event, Emitter<LoginState> emit) {
     emit(state.copyWith(rememberMe: event.value));
+    _persistRememberMe(event.value, state.email);
   }
 
   void _onLoginButtonPressed(
@@ -66,27 +95,30 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     }
 
     emit(state.copyWith(status: LoginStatus.loading));
-    
+
     try {
-      // TODO: Replace with real auth (e.g. Firebase, API)
-      await Future<void>.delayed(const Duration(seconds: 1));
-      
-      // Simulate successful login - create registered user
-      final user = User.registered(
-        id: 'user_${DateTime.now().millisecondsSinceEpoch}',
+      final user = await _authMethods.signInWithEmail(
         email: state.email,
-        name: state.email.split('@').first,
+        password: state.password,
       );
-      
-      emit(state.copyWith(
-        status: LoginStatus.success,
-        user: user,
-      ));
+
+      // Persist email if rememberMe is enabled.
+      await _persistRememberMe(state.rememberMe, state.email);
+
+      emit(
+        state.copyWith(
+          status: LoginStatus.success,
+          user: user,
+          errorMessage: null,
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        status: LoginStatus.failure,
-        errorMessage: e.toString(),
-      ));
+      emit(
+        state.copyWith(
+          status: LoginStatus.failure,
+          errorMessage: e.toString(),
+        ),
+      );
     }
   }
 
@@ -121,31 +153,52 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     }
   }
   Future<void> _onGoogleLoginRequested(
-  GoogleLoginRequested event,
-  Emitter<LoginState> emit,
-) async {
-  emit(state.copyWith(status: LoginStatus.loading));
+    GoogleLoginRequested event,
+    Emitter<LoginState> emit,
+  ) async {
+    emit(state.copyWith(status: LoginStatus.loading));
 
-  try {
-    final user = await _authMethods.signInWithGoogle();
+    try {
+      final user = await _authMethods.signInWithGoogle();
 
-    if (user != null) {
-      emit(state.copyWith(
-        status: LoginStatus.success,
-        user: user,
-      ));
-    } else {
-      emit(state.copyWith(
-        status: LoginStatus.failure,
-        errorMessage: "Google sign in cancelled",
-      ));
+      if (user != null) {
+        emit(
+          state.copyWith(
+            status: LoginStatus.success,
+            user: user,
+            errorMessage: null,
+          ),
+        );
+      } else {
+        emit(
+          state.copyWith(
+            status: LoginStatus.failure,
+            errorMessage: 'Google sign-in cancelled',
+          ),
+        );
+      }
+    } catch (e) {
+      emit(
+        state.copyWith(
+          status: LoginStatus.failure,
+          errorMessage: 'Google sign-in failed',
+        ),
+      );
     }
-  } catch (e) {
-    emit(state.copyWith(
-      status: LoginStatus.failure,
-      errorMessage: "Google sign in failed",
-    ));
+  }
+
+  Future<void> _persistRememberMe(bool remember, String email) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_prefsRememberKey, remember);
+      if (remember) {
+        await prefs.setString(_prefsEmailKey, email);
+      } else {
+        await prefs.remove(_prefsEmailKey);
+      }
+    } catch (_) {
+      // Ignore persistence errors
+    }
   }
 }
 
-}

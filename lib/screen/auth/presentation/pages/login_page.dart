@@ -18,8 +18,6 @@ import '../widgets/password_text_field.dart';
 import '../widgets/social_auth_buttons.dart';
 import '../widgets/sync_invite_preview.dart';
 import '../widgets/kinetic_logo.dart';
-import '../widgets/guest_login_button.dart';
-import '../widgets/host_induction_card.dart';
 
 class LoginPage extends StatelessWidget {
   final String? inviteHostName;
@@ -107,6 +105,7 @@ class _LoginPageContentState extends State<_LoginPageContent> {
     final showInvite =
         widget.inviteHostName != null && widget.inviteHostName!.isNotEmpty;
     final size = MediaQuery.sizeOf(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return SizedBox(
       width: size.width,
@@ -192,7 +191,9 @@ class _LoginPageContentState extends State<_LoginPageContent> {
                           'Stay Connected',
                           style: TextStyle(
                             fontSize: 16,
-                            color: AppColors.textWhite.withValues(alpha: 0.75),
+                            color: isDark
+                                ? AppColors.textWhite.withValues(alpha: 0.75)
+                                : AppColors.textDark.withValues(alpha: 0.8),
                             letterSpacing: 0.5,
                             fontWeight: FontWeight.w400,
                           ),
@@ -213,9 +214,11 @@ class _LoginPageContentState extends State<_LoginPageContent> {
                                   focusNode: _emailFocusNode,
                                   emailValue: state.email,
                                   isEmailValid: state.isEmailValid,
-                                  labelColor: AppColors.textWhite.withValues(
-                                    alpha: 0.95,
-                                  ),
+                                  labelColor: isDark
+                                      ? AppColors.textWhite.withValues(
+                                          alpha: 0.95,
+                                        )
+                                      : AppColors.textDark,
                                   onChanged: (value) {
                                     context.read<LoginBloc>().add(
                                       EmailChanged(value),
@@ -228,9 +231,9 @@ class _LoginPageContentState extends State<_LoginPageContent> {
                             PasswordTextField(
                               controller: _passwordController,
                               focusNode: _passwordFocusNode,
-                              labelColor: AppColors.textWhite.withValues(
-                                alpha: 0.95,
-                              ),
+                              labelColor: isDark
+                                  ? AppColors.textWhite.withValues(alpha: 0.95)
+                                  : AppColors.textDark,
                               onChanged: (value) {
                                 context.read<LoginBloc>().add(
                                   PasswordChanged(value),
@@ -294,9 +297,11 @@ class _LoginPageContentState extends State<_LoginPageContent> {
                                         'Remember Me',
                                         style: TextStyle(
                                           fontSize: 14,
-                                          color: AppColors.textWhite.withValues(
-                                            alpha: 0.95,
-                                          ),
+                                          color: isDark
+                                              ? AppColors.textWhite
+                                                  .withValues(alpha: 0.95)
+                                              : AppColors.textDark
+                                                  .withValues(alpha: 0.9),
                                           fontWeight: FontWeight.w500,
                                           height: 1.2,
                                         ),
@@ -339,77 +344,15 @@ class _LoginPageContentState extends State<_LoginPageContent> {
                                 );
                               },
                             ),
-                            const SizedBox(height: 20),
-                            // Host Induction Section
-                            FadeInUp(
-                              delayMs: 200,
-                              child: const HostInductionCard(),
-                            ),
-                            const SizedBox(height: 20),
-                            // Divider
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Divider(
-                                    color: AppColors.textWhite.withValues(
-                                      alpha: 0.4,
-                                    ),
-                                    thickness: 1,
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  child: Text(
-                                    'or',
-                                    style: TextStyle(
-                                      color: AppColors.textWhite.withValues(
-                                        alpha: 0.7,
-                                      ),
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Divider(
-                                    color: AppColors.textWhite.withValues(
-                                      alpha: 0.4,
-                                    ),
-                                    thickness: 1,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            // Guest Login Button
-                            FadeInUp(
-                              delayMs: 250,
-                              child: GuestLoginButton(
-                                onPressed: () {
-                                  context.read<LoginBloc>().add(
-                                    const GuestLoginRequested(),
-                                  );
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            // Social Auth Section
+                            const SizedBox(height: 24),
+                            // Social Auth Section (Google only)
                             SocialAuthButtons(
                               onGooglePressed: () {
                                 context.read<LoginBloc>().add(
                                   const GoogleLoginRequested(),
                                 );
                               },
-                              onApplePressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      "Apple sign-in available on iOS only",
-                                    ),
-                                  ),
-                                );
-                              },
+                              onApplePressed: () {},
                               onFacebookPressed: () {},
                             ),
                             const SizedBox(height: 16),
@@ -419,23 +362,27 @@ class _LoginPageContentState extends State<_LoginPageContent> {
                                 Text(
                                   "Don't have an account? ",
                                   style: TextStyle(
-                                    color: AppColors.textWhite.withValues(
-                                      alpha: 0.8,
-                                    ),
+                                    color: isDark
+                                        ? AppColors.textWhite
+                                            .withValues(alpha: 0.8)
+                                        : AppColors.textDark
+                                            .withValues(alpha: 0.8),
                                     fontSize: 14,
                                   ),
                                 ),
                                 GestureDetector(
                                   onTap: () => context.go('/signup'),
-                                  child: const Padding(
-                                    padding: EdgeInsets.symmetric(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
                                       vertical: 6,
                                       horizontal: 4,
                                     ),
                                     child: Text(
                                       'Sign Up',
                                       style: TextStyle(
-                                        color: AppColors.textWhite,
+                                        color: isDark
+                                            ? AppColors.textWhite
+                                            : AppColors.primaryAccent,
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
                                       ),

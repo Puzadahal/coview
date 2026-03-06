@@ -404,34 +404,14 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                  child: Divider(
-                                      color: AppColors.textWhite.withValues(alpha: 0.4), thickness: 1)),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10),
-                                child: Text(
-                                  'or',
-                                  style: TextStyle(
-                                    color: AppColors.textWhite.withValues(alpha: 0.7),
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                  child: Divider(
-                                      color: AppColors.textWhite.withValues(alpha: 0.4), thickness: 1)),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 18),
+                          // Social auth (Google only)
                           SocialAuthButtons(
                             onGooglePressed: () {},
                             onApplePressed: () {},
                             onFacebookPressed: () {},
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
@@ -26,7 +27,7 @@ class TrustIndicators extends StatelessWidget {
           spacing: 20,
           runSpacing: 16,
           alignment: WrapAlignment.center,
-          children: _buildPlatformIcons(),
+          children: _buildPlatformIcons(context),
         ),
         const SizedBox(height: 48),
         // How it Works section
@@ -44,7 +45,7 @@ class TrustIndicators extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildPlatformIcons() {
+  List<Widget> _buildPlatformIcons(BuildContext context) {
     final platforms = [
       {'name': 'YouTube', 'image': 'assets/images/youtube.png'},
       {'name': 'Netflix', 'image': 'assets/images/netflix.png'},
@@ -55,35 +56,58 @@ class TrustIndicators extends StatelessWidget {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-           width: 80,
-           height: 80,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.textWhite.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-              border: Border.all(
-                color: AppColors.textWhite.withValues(alpha: 0.2),
-                width: 1,
+          InkWell(
+            borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+            onTap: () {
+              final name = platform['name'] as String;
+              // For now, all supported platforms lead into the Create Room flow,
+              // with a short hint describing what to do next.
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    name == 'YouTube'
+                        ? 'Paste a YouTube link in the Video URL field.'
+                        : name == 'Netflix'
+                            ? 'Paste a Netflix episode or movie URL in the Video URL field.'
+                            : 'Use the Upload button or a file URL for local files.',
+                  ),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+              // Navigate to the unified Create Room screen.
+              context.go('/create-room');
+            },
+            child: Container(
+              width: 80,
+              height: 80,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.textWhite.withValues(alpha: 0.1),
+                borderRadius:
+                    BorderRadius.circular(AppConstants.borderRadiusMedium),
+                border: Border.all(
+                  color: AppColors.textWhite.withValues(alpha: 0.2),
+                  width: 1,
+                ),
               ),
-            ),
-            child: Image.asset(
-              platform['image'] as String,
-              width: 150,
-              height: 100,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                // Fallback to icon if image fails to load
-                return Icon(
-                  platform['name'] == 'YouTube'
-                      ? Icons.play_circle_outline
-                      : platform['name'] == 'Netflix'
-                          ? Icons.movie_outlined
-                          : Icons.folder_outlined,
-                  color: AppColors.textWhite,
-                  size: 32,
-                );
-              },
+              child: Image.asset(
+                platform['image'] as String,
+                width: 150,
+                height: 100,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  // Fallback to icon if image fails to load
+                  return Icon(
+                    platform['name'] == 'YouTube'
+                        ? Icons.play_circle_outline
+                        : platform['name'] == 'Netflix'
+                            ? Icons.movie_outlined
+                            : Icons.folder_outlined,
+                    color: AppColors.textWhite,
+                    size: 32,
+                  );
+                },
+              ),
             ),
           ),
           const SizedBox(height: 8),

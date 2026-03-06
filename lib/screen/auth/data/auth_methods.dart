@@ -7,6 +7,75 @@ class AuthMethods {
   final fb.FirebaseAuth _auth = fb.FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  /// Email + password signup using Firebase Auth and Firestore.
+  Future<User> signUpWithEmail({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final cred = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final fb.User? firebaseUser = cred.user;
+      if (firebaseUser == null) {
+        throw Exception('Signup failed. Please try again.');
+      }
+
+      await _firestore.collection('users').doc(firebaseUser.uid).set({
+        'uid': firebaseUser.uid,
+        'email': email,
+        'name': name,
+        'createdAt': FieldValue.serverTimestamp(),
+        'isGuest': false,
+      });
+
+      return User.registered(
+        id: firebaseUser.uid,
+        email: email,
+        name: name,
+      );
+    } on fb.FirebaseAuthException catch (e) {
+      throw Exception(e.message ?? 'Signup failed. Please try again.');
+    } catch (e) {
+      throw Exception('Signup failed. Please try again.');
+    }
+  }
+
+  /// Email + password login using Firebase Auth.
+  Future<User> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final cred = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final fb.User? firebaseUser = cred.user;
+      if (firebaseUser == null) {
+        throw Exception('Login failed. Please try again.');
+      }
+
+      // Read profile from Firestore (if present) to get name.
+      final doc = await _firestore.collection('users').doc(firebaseUser.uid).get();
+      final data = doc.data();
+      final name = (data?['name'] as String?) ?? (firebaseUser.email ?? '').split('@').first;
+
+      return User.registered(
+        id: firebaseUser.uid,
+        email: firebaseUser.email ?? email,
+        name: name,
+      );
+    } on fb.FirebaseAuthException catch (e) {
+      throw Exception(e.message ?? 'Login failed. Please try again.');
+    } catch (e) {
+      throw Exception('Login failed. Please try again.');
+    }
+  }
+
+  /// Google sign‑in using Firebase Auth and Firestore.
   Future<User?> signInWithGoogle() async {
     try {
       /// STEP 1 — Pick Google account
