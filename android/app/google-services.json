@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "430854546205",
+    "project_id": "coview-c26d3",
+    "storage_bucket": "coview-c26d3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:430854546205:android:a1722ed50766f5ad2277f4",
+        "android_client_info": {
+          "package_name": "com.coview.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDMFzj7CQESbyw29A6viI0Y-ch0WVEosUU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

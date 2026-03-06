@@ -1,0 +1,132 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../config/colors/app_colors.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../domain/bloc/join_room_bloc.dart';
+import '../../domain/bloc/join_room_event.dart';
+import '../../domain/bloc/join_room_state.dart';
+
+/// Join Existing Room screen – user pastes invite link or room code.
+class JoinRoomPage extends StatefulWidget {
+  const JoinRoomPage({super.key});
+
+  @override
+  State<JoinRoomPage> createState() => _JoinRoomPageState();
+}
+
+class _JoinRoomPageState extends State<JoinRoomPage> {
+  final TextEditingController _inputController = TextEditingController();
+
+  @override
+  void dispose() {
+    _inputController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    context.read<JoinRoomBloc>().add(const JoinRoomSubmitted());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: isDark ? AppColors.primaryDark : AppColors.lightBackground,
+      appBar: AppBar(
+        title: const Text('Join Existing Room'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
+          },
+        ),
+      ),
+      body: BlocListener<JoinRoomBloc, JoinRoomState>(
+        listenWhen: (previous, current) =>
+            previous.status != current.status && current.status == JoinRoomStatus.success,
+        listener: (context, state) {
+          final roomId = state.resolvedRoomId;
+          if (roomId != null && roomId.isNotEmpty) {
+            context.go('/join/$roomId');
+          }
+        },
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppConstants.spacingLarge),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 500),
+              child: BlocBuilder<JoinRoomBloc, JoinRoomState>(
+                builder: (context, state) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Enter Invite Link or Room Code',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? AppColors.textWhite : AppColors.textDark,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: AppConstants.spacingMedium),
+                      Text(
+                        'Paste the Coview invite link you received, or type the room code shared by your host.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: isDark
+                              ? AppColors.textWhite.withValues(alpha: 0.8)
+                              : AppColors.textGrey,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: AppConstants.spacingLarge),
+                      TextField(
+                        controller: _inputController,
+                        minLines: 1,
+                        maxLines: 3,
+                        decoration: InputDecoration(
+                          hintText:
+                              'https://syncview.app/join/room_1234abcd or room_1234abcd',
+                          prefixIcon: const Icon(Icons.link),
+                          errorText: state.error,
+                        ),
+                        onChanged: (value) {
+                          context
+                              .read<JoinRoomBloc>()
+                              .add(JoinRoomInputChanged(value));
+                        },
+                        onSubmitted: (_) => _submit(),
+                      ),
+                      const SizedBox(height: AppConstants.spacingLarge),
+                      SizedBox(
+                        height: AppConstants.buttonHeightLarge,
+                        child: ElevatedButton.icon(
+                          onPressed:
+                              state.canSubmit ? _submit : null,
+                          icon: const Icon(Icons.meeting_room_outlined),
+                          label: const Text(
+                            'Join Room',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
