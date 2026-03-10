@@ -16,10 +16,11 @@ class ThemeState extends Equatable {
 
   /// Initial state
   factory ThemeState.initial() {
+    // Default the app to dark mode for a more cinematic, watch‑party feel.
     return const ThemeState(
-      mode: ThemeModeType.system,
-      flutterThemeMode: ThemeMode.system,
-      isDarkMode: false,
+      mode: ThemeModeType.dark,
+      flutterThemeMode: ThemeMode.dark,
+      isDarkMode: true,
     );
   }
 

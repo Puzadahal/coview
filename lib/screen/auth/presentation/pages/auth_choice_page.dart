@@ -27,13 +27,19 @@ class AuthChoicePage extends StatelessWidget {
                 children: [
                   // Logo / brand
                   Container(
-                    height: size.height * 0.18,
+                    height: size.height * 0.22,
                     alignment: Alignment.center,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        Image.asset(
+                          'assets/logo/logo.png',
+                          height: size.height * 0.12,
+                          fit: BoxFit.contain,
+                        ),
+                        const SizedBox(height: 12),
                         Text(
-                          'Coview',
+                          'SyncView',
                           style: theme.textTheme.headlineMedium?.copyWith(
                             color: isDark ? AppColors.textWhite : AppColors.textDark,
                             fontWeight: FontWeight.bold,

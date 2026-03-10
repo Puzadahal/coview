@@ -15,6 +15,9 @@ class SignupBloc extends Bloc<SignupEvent, SignupState> {
       _onConfirmPasswordVisibilityToggled,
     );
     on<SignupAgreedToTermsChanged>(_onAgreedToTermsChanged);
+    on<SignupEmailFieldFocused>(_onFieldFocused);
+    on<SignupPasswordFieldFocused>(_onFieldFocused);
+    on<SignupFieldUnfocused>(_onFieldUnfocused);
     on<SignupButtonPressed>(_onSignupButtonPressed);
   }
 
@@ -30,6 +33,21 @@ class SignupBloc extends Bloc<SignupEvent, SignupState> {
   static final _emailRegex = RegExp(
     r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
   );
+
+  void _onFieldFocused(SignupEvent event, Emitter<SignupState> emit) {
+    // When a field is focused, clear any previous failure state so the
+    // error message can be reconsidered on the next submit.
+    emit(
+      state.copyWith(
+        status: SignupStatus.initial,
+        errorMessage: null,
+      ),
+    );
+  }
+
+  void _onFieldUnfocused(SignupFieldUnfocused event, Emitter<SignupState> emit) {
+    // No-op for now, but keeps BLoC consistent with dispatched events.
+  }
 
   void _onNameChanged(SignupNameChanged event, Emitter<SignupState> emit) {
     emit(
@@ -138,7 +156,8 @@ class SignupBloc extends Bloc<SignupEvent, SignupState> {
       emit(
         state.copyWith(
           status: SignupStatus.failure,
-          errorMessage: e.toString(),
+          // e is usually an Exception from AuthMethods with a user‑friendly message.
+          errorMessage: e.toString().replaceFirst('Exception: ', ''),
         ),
       );
     }

@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// One-tap social login with Google.
+/// One-tap social login with Google, using the branded logo asset.
 class SocialAuthButtons extends StatelessWidget {
   final VoidCallback? onGooglePressed;
   final VoidCallback? onApplePressed;
@@ -18,33 +18,36 @@ class SocialAuthButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _SocialButton(
-          label: 'Continue with Google',
-          icon: Icons.g_mobiledata_rounded,
-          onPressed: onGooglePressed,
-        ),
-      ],
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Center(
+      child: _GoogleButton(
+        label: 'Continue with Google',
+        onPressed: onGooglePressed,
+        isDark: isDark,
+      ),
     );
   }
 }
 
-class _SocialButton extends StatelessWidget {
+class _GoogleButton extends StatelessWidget {
   final String label;
-  final IconData icon;
   final VoidCallback? onPressed;
+  final bool isDark;
 
-  const _SocialButton({
+  const _GoogleButton({
     required this.label,
-    required this.icon,
-    this.onPressed,
+    required this.onPressed,
+    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
+    final bgColor = isDark ? Colors.white : Colors.white;
+    final textColor = isDark ? AppColors.textDark : AppColors.textDark;
+
     return Material(
-      color: Colors.white.withValues(alpha: 0.2),
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
       child: InkWell(
         onTap: () {
@@ -53,21 +56,36 @@ class _SocialButton extends StatelessWidget {
         },
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
         child: Container(
-          height: AppConstants.buttonHeightSmall + 4,
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Column(
+          height: AppConstants.buttonHeightMedium,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: AppColors.textWhite, size: 18),
-              const SizedBox(height: 0),
+              Image.asset(
+                'assets/logo/google.png',
+                width: 20,
+                height: 20,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(width: 12),
               Text(
                 label,
-                style: const TextStyle(
-                  fontSize: AppConstants.fontSizeSmall,
-                  color: AppColors.textWhite,
-                  fontWeight: FontWeight.w500,
-                  height: 1.1,
+                style: TextStyle(
+                  fontSize: AppConstants.fontSizeMedium,
+                  color: textColor,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],

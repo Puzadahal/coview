@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/widgets/theme_toggle_button.dart';
 import '../../../../core/theme/domain/bloc/theme_bloc.dart';
@@ -16,6 +17,12 @@ class ProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final currentUser = fb.FirebaseAuth.instance.currentUser;
+    final displayName =
+        (currentUser?.displayName?.trim().isNotEmpty ?? false)
+            ? currentUser!.displayName!.trim()
+            : 'User';
+    final emailText = currentUser?.email ?? 'No email';
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -54,14 +61,14 @@ class ProfilePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'User Name', // TODO: Replace with actual user name
+                    displayName,
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'user@example.com', // TODO: Replace with actual email
+                    emailText,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                     ),
@@ -336,6 +343,10 @@ class ProfilePage extends StatelessWidget {
                             onPressed: () async {
                               Navigator.of(dialogContext).pop();
                               await fb.FirebaseAuth.instance.signOut();
+                              try {
+                                final prefs = await SharedPreferences.getInstance();
+                                await prefs.setBool('logged_in', false);
+                              } catch (_) {}
                               if (context.mounted) {
                                 context.go('/login');
                               }

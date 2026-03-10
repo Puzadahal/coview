@@ -23,6 +23,10 @@ class AuthMethods {
         throw Exception('Signup failed. Please try again.');
       }
 
+      // Keep FirebaseAuth profile in sync so we can easily show the
+      // user name and email on the Profile page.
+      await firebaseUser.updateDisplayName(name);
+
       await _firestore.collection('users').doc(firebaseUser.uid).set({
         'uid': firebaseUser.uid,
         'email': email,
@@ -37,9 +41,25 @@ class AuthMethods {
         name: name,
       );
     } on fb.FirebaseAuthException catch (e) {
-      throw Exception(e.message ?? 'Signup failed. Please try again.');
+      // Map common Firebase error codes to clear messages.
+      switch (e.code) {
+        case 'email-already-in-use':
+          throw Exception(
+            'This email is already registered. Please login instead.',
+          );
+        case 'invalid-email':
+          throw Exception('The email address is not valid.');
+        case 'operation-not-allowed':
+          throw Exception(
+            'Email/password accounts are disabled for this project. Enable them in Firebase Auth settings.',
+          );
+        case 'weak-password':
+          throw Exception('The password is too weak. Please choose a stronger one.');
+        default:
+          throw Exception(e.message ?? 'Signup failed. Please try again.');
+      }
     } catch (e) {
-      throw Exception('Signup failed. Please try again.');
+      throw Exception('Unexpected signup error. Please try again.');
     }
   }
 
@@ -69,9 +89,19 @@ class AuthMethods {
         name: name,
       );
     } on fb.FirebaseAuthException catch (e) {
-      throw Exception(e.message ?? 'Login failed. Please try again.');
+      switch (e.code) {
+        case 'user-not-found':
+        case 'wrong-password':
+          throw Exception('Invalid email or password.');
+        case 'invalid-email':
+          throw Exception('The email address is not valid.');
+        case 'user-disabled':
+          throw Exception('This account has been disabled.');
+        default:
+          throw Exception(e.message ?? 'Login failed. Please try again.');
+      }
     } catch (e) {
-      throw Exception('Login failed. Please try again.');
+      throw Exception('Unexpected login error. Please try again.');
     }
   }
 

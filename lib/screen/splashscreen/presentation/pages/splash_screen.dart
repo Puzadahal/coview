@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -24,12 +26,27 @@ class _SplashScreenState extends State<SplashScreen>
       if (mounted) _animationController.forward();
     });
 
-    // Navigate to auth choice after delay
-    Future.delayed(const Duration(seconds: 5), () {
-      if (mounted) {
-        context.go('/auth');
-      }
-    });
+    _navigateAfterDelay();
+  }
+
+  Future<void> _navigateAfterDelay() async {
+    await Future.delayed(const Duration(seconds: 3));
+    if (!mounted) return;
+
+    // Prefer FirebaseAuth for real auth state, with SharedPreferences
+    // as a simple local hint.
+    final currentUser = fb.FirebaseAuth.instance.currentUser;
+    bool wasLoggedInFlag = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      wasLoggedInFlag = prefs.getBool('logged_in') ?? false;
+    } catch (_) {}
+
+    if (currentUser != null || wasLoggedInFlag) {
+      context.go('/home');
+    } else {
+      context.go('/auth');
+    }
   }
 
   void _setupAnimations() {

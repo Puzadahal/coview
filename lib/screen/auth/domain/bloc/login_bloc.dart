@@ -9,6 +9,9 @@ import 'login_state.dart';
 class LoginBloc extends Bloc<LoginEvent, LoginState> {
   LoginBloc() : super(const LoginState()) {
     on<LoginInitialized>(_onInitialized);
+    on<EmailFieldFocused>(_onFieldFocused);
+    on<PasswordFieldFocused>(_onFieldFocused);
+    on<FieldUnfocused>(_onFieldUnfocused);
     on<EmailChanged>(_onEmailChanged);
     on<PasswordChanged>(_onPasswordChanged);
     on<PasswordVisibilityToggled>(_onPasswordVisibilityToggled);
@@ -28,6 +31,21 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
 
   static const _prefsRememberKey = 'login_remember_me';
   static const _prefsEmailKey = 'login_saved_email';
+  static const _prefsLoggedInKey = 'logged_in';
+
+  void _onFieldFocused(LoginEvent event, Emitter<LoginState> emit) {
+    // Clear previous error when the user focuses a field.
+    emit(
+      state.copyWith(
+        status: LoginStatus.initial,
+        errorMessage: null,
+      ),
+    );
+  }
+
+  void _onFieldUnfocused(FieldUnfocused event, Emitter<LoginState> emit) {
+    // No-op for now; handler exists so add(...) is always valid.
+  }
 
   Future<void> _onInitialized(
     LoginInitialized event,
@@ -104,6 +122,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
 
       // Persist email if rememberMe is enabled.
       await _persistRememberMe(state.rememberMe, state.email);
+      await _persistLoggedIn(true);
 
       emit(
         state.copyWith(
@@ -162,6 +181,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       final user = await _authMethods.signInWithGoogle();
 
       if (user != null) {
+        await _persistLoggedIn(true);
         emit(
           state.copyWith(
             status: LoginStatus.success,
@@ -196,6 +216,15 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       } else {
         await prefs.remove(_prefsEmailKey);
       }
+    } catch (_) {
+      // Ignore persistence errors
+    }
+  }
+
+  Future<void> _persistLoggedIn(bool value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_prefsLoggedInKey, value);
     } catch (_) {
       // Ignore persistence errors
     }
