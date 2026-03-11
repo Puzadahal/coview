@@ -13,29 +13,35 @@ class AuthChoicePage extends StatelessWidget {
     final size = MediaQuery.of(context).size;
     final isDark = theme.brightness == Brightness.dark;
 
+    final logoSize = size.width.clamp(90, 150);
+
     return Scaffold(
-      backgroundColor: isDark ? AppColors.primaryDark : AppColors.lightBackground,
+      backgroundColor:
+          isDark ? AppColors.primaryDark : AppColors.lightBackground,
       body: SafeArea(
         child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(AppConstants.spacingLarge),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 500),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.all(AppConstants.spacingLarge),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 500),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                   // Logo / brand
                   Container(
-                    height: size.height * 0.22,
                     alignment: Alignment.center,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Image.asset(
-                          'assets/logo/logo.png',
-                          height: size.height * 0.12,
-                          fit: BoxFit.contain,
+                        SizedBox(
+                          height: logoSize as double,
+                          child: Image.asset(
+                            'assets/logo/logo.png',
+                            fit: BoxFit.contain,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         Text(
@@ -114,6 +120,7 @@ class AuthChoicePage extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
               ),
             ),
           ),

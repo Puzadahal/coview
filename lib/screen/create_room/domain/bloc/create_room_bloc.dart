@@ -1,4 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../../../../core/constants/app_constants.dart';
 import 'create_room_event.dart';
 import 'create_room_state.dart';
@@ -6,6 +8,9 @@ import 'create_room_state.dart';
 /// BLoC for managing Create Room state
 class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
   CreateRoomBloc() : super(const CreateRoomState()) {
+    _firestore = FirebaseFirestore.instance;
+    _auth = fb.FirebaseAuth.instance;
+
     on<RoomNameChanged>(_onRoomNameChanged);
     on<VideoUrlChanged>(_onVideoUrlChanged);
     on<PrivacySettingChanged>(_onPrivacySettingChanged);
@@ -18,6 +23,9 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     on<CreateRoomButtonPressed>(_onCreateRoomButtonPressed);
     on<CreateRoomFormReset>(_onCreateRoomFormReset);
   }
+
+  late final FirebaseFirestore _firestore;
+  late final fb.FirebaseAuth _auth;
 
   void _onRoomNameChanged(
     RoomNameChanged event,
@@ -129,11 +137,29 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     emit(state.copyWith(status: CreateRoomStatus.loading));
 
     try {
-      // Simulate API call to create room
-      await Future.delayed(const Duration(seconds: 1));
+      final fb.User? currentUser = _auth.currentUser;
 
-      // Generate invite link
       final roomId = _generateRoomId();
+
+      final roomData = <String, dynamic>{
+        'roomId': roomId,
+        'name': state.roomName.trim(),
+        'videoUrl': state.videoUrl.trim(),
+        'isPrivate': state.isPrivate,
+        'hostControlsOnly': state.hostControlsOnly,
+        'participantLimit': state.participantLimit,
+        'textChatEnabled': state.textChatEnabled,
+        'voiceChatEnabled': state.voiceChatEnabled,
+        'videoBubblesEnabled': state.videoBubblesEnabled,
+        'createdAt': FieldValue.serverTimestamp(),
+        'hostId': currentUser?.uid,
+        'hostName': currentUser?.displayName ??
+            currentUser?.email ??
+            'Guest',
+      };
+
+      await _firestore.collection('rooms').doc(roomId).set(roomData);
+
       final inviteLink = 'https://syncview.app/join/$roomId';
 
       emit(state.copyWith(
@@ -144,7 +170,7 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     } catch (e) {
       emit(state.copyWith(
         status: CreateRoomStatus.failure,
-        errorMessage: e.toString(),
+        errorMessage: 'Failed to create room. Please try again.',
       ));
     }
   }

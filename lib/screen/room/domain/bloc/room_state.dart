@@ -17,12 +17,16 @@ class RoomState extends Equatable {
   final List<RoomMessage> messages;
   final RoomStatus status;
   final String? error;
+  final String? roomName;
+  final String? videoUrl;
 
   const RoomState({
     required this.roomId,
     required this.messages,
     this.status = RoomStatus.viewing,
     this.error,
+    this.roomName,
+    this.videoUrl,
   });
 
   factory RoomState.initial(String roomId) {
@@ -40,16 +44,20 @@ class RoomState extends Equatable {
     List<RoomMessage>? messages,
     RoomStatus? status,
     String? error,
+    String? roomName,
+    String? videoUrl,
   }) {
     return RoomState(
       roomId: roomId ?? this.roomId,
       messages: messages ?? this.messages,
       status: status ?? this.status,
       error: error,
+      roomName: roomName ?? this.roomName,
+      videoUrl: videoUrl ?? this.videoUrl,
     );
   }
 
   @override
-  List<Object?> get props => [roomId, messages, status, error];
+  List<Object?> get props => [roomId, messages, status, error, roomName, videoUrl];
 }
 

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../domain/bloc/room_bloc.dart';
@@ -19,10 +21,14 @@ class RoomPage extends StatefulWidget {
 
 class _RoomPageState extends State<RoomPage> {
   final TextEditingController _messageController = TextEditingController();
+  VideoPlayerController? _videoController;
+  Future<void>? _initializeVideoFuture;
+  String? _currentVideoUrl;
 
   @override
   void dispose() {
     _messageController.dispose();
+    _videoController?.dispose();
     super.dispose();
   }
 
@@ -40,7 +46,8 @@ class _RoomPageState extends State<RoomPage> {
     final isWide = size.width > 900;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.primaryDark : AppColors.backgroundWhite,
+      backgroundColor:
+          isDark ? AppColors.primaryDark : AppColors.backgroundWhite,
       appBar: AppBar(
         backgroundColor:
             isDark ? AppColors.primaryDarkVariant : AppColors.backgroundWhite,
@@ -55,17 +62,22 @@ class _RoomPageState extends State<RoomPage> {
             }
           },
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Coview Room'),
-            Text(
-              '#${widget.roomId}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
-            ),
-          ],
+        title: BlocBuilder<RoomBloc, RoomState>(
+          builder: (context, state) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(state.roomName ?? 'Coview Room'),
+                Text(
+                  '#${widget.roomId}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color:
+                        theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
         actions: [
           IconButton(
@@ -103,28 +115,105 @@ class _RoomPageState extends State<RoomPage> {
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(AppConstants.spacingMedium),
-            child: isWide
-                ? Row(
-                    children: [
-                      Expanded(flex: 3, child: _buildVideoPane(theme, isDark)),
-                      const SizedBox(width: AppConstants.spacingMedium),
-                      Expanded(flex: 2, child: _buildChatPane(theme, isDark)),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      _buildVideoPane(theme, isDark),
-                      const SizedBox(height: AppConstants.spacingMedium),
-                      Expanded(child: _buildChatPane(theme, isDark)),
-                    ],
-                  ),
+            child: BlocBuilder<RoomBloc, RoomState>(
+              builder: (context, state) {
+                _setupVideoController(state.videoUrl);
+
+                if (state.status == RoomStatus.loading) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (state.status == RoomStatus.error) {
+                  return Center(
+                    child: Text(
+                      state.error ?? 'Failed to load room.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: AppColors.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  );
+                }
+
+                return isWide
+                    ? Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: _buildVideoPane(
+                              theme,
+                              isDark,
+                              state,
+                            ),
+                          ),
+                          const SizedBox(width: AppConstants.spacingMedium),
+                          Expanded(
+                            flex: 2,
+                            child: _buildChatPane(theme, isDark),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          _buildVideoPane(theme, isDark, state),
+                          const SizedBox(height: AppConstants.spacingMedium),
+                          Expanded(
+                            child: _buildChatPane(theme, isDark),
+                          ),
+                        ],
+                      );
+              },
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildVideoPane(ThemeData theme, bool isDark) {
+  void _setupVideoController(String? url) {
+    if (url == null || url.isEmpty) {
+      if (_videoController != null) {
+        _videoController!.dispose();
+        _videoController = null;
+        _initializeVideoFuture = null;
+        _currentVideoUrl = null;
+      }
+      return;
+    }
+
+    if (_currentVideoUrl == url && _videoController != null) {
+      return;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri == null ||
+        !(uri.scheme == 'http' || uri.scheme == 'https') ||
+        !(uri.path.endsWith('.mp4') || uri.path.endsWith('.m3u8'))) {
+      // Not a direct playable file URL; use external launcher instead.
+      if (_videoController != null) {
+        _videoController!.dispose();
+        _videoController = null;
+        _initializeVideoFuture = null;
+      }
+      _currentVideoUrl = url;
+      return;
+    }
+
+    _videoController?.dispose();
+    _videoController = VideoPlayerController.networkUrl(uri);
+    _currentVideoUrl = url;
+    _initializeVideoFuture = _videoController!.initialize().then((_) {
+      setState(() {});
+      _videoController!.play();
+    });
+  }
+
+  Widget _buildVideoPane(
+    ThemeData theme,
+    bool isDark,
+    RoomState state,
+  ) {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppColors.primaryDarkVariant : AppColors.lightSurface,
@@ -156,31 +245,145 @@ class _RoomPageState extends State<RoomPage> {
                 ),
               ),
               child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.play_circle_fill,
-                      size: 72,
-                      color: AppColors.textWhite.withValues(alpha: 0.95),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Synchronized playback UI',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: AppColors.textWhite,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Hook this up to your video player / API.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.textWhite.withValues(alpha: 0.8),
-                      ),
-                    ),
-                  ],
-                ),
+                child: state.videoUrl == null || state.videoUrl!.isEmpty
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.play_circle_fill,
+                            size: 72,
+                            color: AppColors.textWhite
+                                .withValues(alpha: 0.95),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No video URL configured for this room.',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: AppColors.textWhite,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      )
+                    : (_videoController != null &&
+                            _initializeVideoFuture != null)
+                        ? FutureBuilder<void>(
+                            future: _initializeVideoFuture,
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState !=
+                                  ConnectionState.done) {
+                                return const CircularProgressIndicator(
+                                  valueColor:
+                                      AlwaysStoppedAnimation<Color>(
+                                    AppColors.textWhite,
+                                  ),
+                                );
+                              }
+                              return Stack(
+                                alignment: Alignment.bottomCenter,
+                                children: [
+                                  AspectRatio(
+                                    aspectRatio: _videoController!
+                                        .value.aspectRatio,
+                                    child: VideoPlayer(_videoController!),
+                                  ),
+                                  IconButton(
+                                    iconSize: 40,
+                                    color: AppColors.textWhite,
+                                    icon: Icon(
+                                      _videoController!.value.isPlaying
+                                          ? Icons.pause_circle_filled
+                                          : Icons.play_circle_fill,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        if (_videoController!
+                                            .value.isPlaying) {
+                                          _videoController!.pause();
+                                        } else {
+                                          _videoController!.play();
+                                        }
+                                      });
+                                    },
+                                  ),
+                                ],
+                              );
+                            },
+                          )
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.play_circle_fill,
+                                size: 72,
+                                color: AppColors.textWhite
+                                    .withValues(alpha: 0.95),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Open video in browser / app',
+                                style:
+                                    theme.textTheme.titleMedium?.copyWith(
+                                  color: AppColors.textWhite,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppConstants.spacingMedium,
+                                ),
+                                child: SelectableText(
+                                  state.videoUrl!,
+                                  style: theme.textTheme.bodySmall
+                                      ?.copyWith(
+                                    color: AppColors.textWhite
+                                        .withValues(alpha: 0.9),
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                onPressed: () async {
+                                  final uri =
+                                      Uri.tryParse(state.videoUrl!);
+                                  if (uri == null) {
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Invalid video URL. Please recreate the room with a valid link.',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  final canOpen =
+                                      await canLaunchUrl(uri);
+                                  if (!canOpen) {
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Cannot open this video link on this device.',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  await launchUrl(
+                                    uri,
+                                    mode: LaunchMode
+                                        .externalApplication,
+                                  );
+                                },
+                                icon: const Icon(Icons.open_in_new),
+                                label: const Text('Open Video'),
+                              ),
+                            ],
+                          ),
               ),
             ),
           ),

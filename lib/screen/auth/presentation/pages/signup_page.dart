@@ -408,8 +408,7 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                           // Social auth (Google only)
                           SocialAuthButtons(
                             onGooglePressed: () {},
-                            onApplePressed: () {},
-                            onFacebookPressed: () {},
+                           
                           ),
                           const SizedBox(height: 12),
                           Row(

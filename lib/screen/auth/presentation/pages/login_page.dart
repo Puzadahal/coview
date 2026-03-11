@@ -352,8 +352,7 @@ class _LoginPageContentState extends State<_LoginPageContent> {
                                   const GoogleLoginRequested(),
                                 );
                               },
-                              onApplePressed: () {},
-                              onFacebookPressed: () {},
+                              
                             ),
                             const SizedBox(height: 16),
                             Row(

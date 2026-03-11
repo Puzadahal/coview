@@ -3,17 +3,14 @@ import 'package:flutter/services.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// One-tap social login with Google, using the branded logo asset.
 class SocialAuthButtons extends StatelessWidget {
   final VoidCallback? onGooglePressed;
-  final VoidCallback? onApplePressed;
-  final VoidCallback? onFacebookPressed;
+  
 
   const SocialAuthButtons({
     super.key,
     this.onGooglePressed,
-    this.onApplePressed,
-    this.onFacebookPressed,
+    
   });
 
   @override
@@ -21,10 +18,13 @@ class SocialAuthButtons extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Center(
-      child: _GoogleButton(
-        label: 'Continue with Google',
-        onPressed: onGooglePressed,
-        isDark: isDark,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: _GoogleButton(
+          label: 'Continue with Google',
+          onPressed: onGooglePressed,
+          isDark: isDark,
+        ),
       ),
     );
   }
@@ -57,10 +57,12 @@ class _GoogleButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
         child: Container(
           height: AppConstants.buttonHeightMedium,
+          width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             color: bgColor,
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+            borderRadius:
+                BorderRadius.circular(AppConstants.borderRadiusMedium),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.1),
@@ -74,18 +76,25 @@ class _GoogleButton extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Image.asset(
-                'assets/logo/google.png',
-                width: 20,
-                height: 20,
+                'assets/images/google.png',
+                width: 60,
+                height: 40,
                 fit: BoxFit.contain,
               ),
               const SizedBox(width: 12),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: AppConstants.fontSizeMedium,
-                  color: textColor,
-                  fontWeight: FontWeight.w600,
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppConstants.fontSizeMedium,
+                      color: textColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             ],
