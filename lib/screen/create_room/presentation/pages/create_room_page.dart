@@ -253,7 +253,7 @@ class _VideoUrlField extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Video URL',
+              'Video URL or Local Video Path',
               style: TextStyle(
                 fontSize: AppConstants.fontSizeMedium,
                 fontWeight: FontWeight.w600,
@@ -268,7 +268,8 @@ class _VideoUrlField extends StatelessWidget {
                 context.read<CreateRoomBloc>().add(VideoUrlChanged(value));
               },
               decoration: InputDecoration(
-                hintText: 'Paste YouTube, Netflix, or video URL',
+                hintText:
+                    'Paste YouTube / Twitch / Dailymotion link, direct video URL, or local path',
                 hintStyle: TextStyle(
                   color: isDark
                       ? AppColors.textWhite.withValues(alpha: 0.5)

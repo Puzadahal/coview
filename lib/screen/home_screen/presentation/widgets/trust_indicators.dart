@@ -48,7 +48,8 @@ class TrustIndicators extends StatelessWidget {
   List<Widget> _buildPlatformIcons(BuildContext context) {
     final platforms = [
       {'name': 'YouTube', 'image': 'assets/images/youtube.png'},
-      {'name': 'Netflix', 'image': 'assets/images/netflix.png'},
+      {'name': 'Twitch', 'image': 'assets/images/twitch.png'},
+      {'name': 'Dailymotion', 'image': 'assets/images/dailymotion.png'},
       {'name': 'Local Files', 'image': 'assets/images/files.png'},
     ];
 
@@ -67,9 +68,11 @@ class TrustIndicators extends StatelessWidget {
                   content: Text(
                     name == 'YouTube'
                         ? 'Paste a YouTube link in the Video URL field.'
-                        : name == 'Netflix'
-                            ? 'Paste a Netflix episode or movie URL in the Video URL field.'
-                            : 'Use the Upload button or a file URL for local files.',
+                        : name == 'Twitch'
+                            ? 'Paste a Twitch stream or VOD link in the Video URL field.'
+                            : name == 'Dailymotion'
+                                ? 'Paste a Dailymotion video link in the Video URL field.'
+                                : 'Use the Upload button or a file URL for local files.',
                   ),
                   duration: const Duration(seconds: 2),
                 ),
@@ -100,9 +103,11 @@ class TrustIndicators extends StatelessWidget {
                   return Icon(
                     platform['name'] == 'YouTube'
                         ? Icons.play_circle_outline
-                        : platform['name'] == 'Netflix'
-                            ? Icons.movie_outlined
-                            : Icons.folder_outlined,
+                        : platform['name'] == 'Twitch'
+                            ? Icons.videogame_asset
+                            : platform['name'] == 'Dailymotion'
+                                ? Icons.movie_outlined
+                                : Icons.folder_outlined,
                     color: AppColors.textWhite,
                     size: 32,
                   );

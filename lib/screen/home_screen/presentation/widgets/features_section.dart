@@ -32,7 +32,7 @@ class FeaturesSection extends StatelessWidget {
       {
         'icon': Icons.sync,
         'title': 'Perfect Sync',
-        'description': 'One-click synchronization for YouTube, Netflix, or local files.',
+        'description': 'One-click synchronization for YouTube, Twitch, Dailymotion, or local files.',
       },
       {
         'icon': Icons.chat_bubble_outline,

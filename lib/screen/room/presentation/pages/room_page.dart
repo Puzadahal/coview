@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +10,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../domain/bloc/room_bloc.dart';
 import '../../domain/bloc/room_event.dart';
 import '../../domain/bloc/room_state.dart';
+import '../widgets/youtube_player_view.dart';
 
 /// Coview Room screen showing synchronized playback UI and real‑time chat.
 class RoomPage extends StatefulWidget {
@@ -172,7 +175,7 @@ class _RoomPageState extends State<RoomPage> {
   }
 
   void _setupVideoController(String? url) {
-    if (url == null || url.isEmpty) {
+    if (url == null || url.isEmpty || _isYouTubeUrl(url)) {
       if (_videoController != null) {
         _videoController!.dispose();
         _videoController = null;
@@ -187,10 +190,21 @@ class _RoomPageState extends State<RoomPage> {
     }
 
     final uri = Uri.tryParse(url);
-    if (uri == null ||
-        !(uri.scheme == 'http' || uri.scheme == 'https') ||
-        !(uri.path.endsWith('.mp4') || uri.path.endsWith('.m3u8'))) {
-      // Not a direct playable file URL; use external launcher instead.
+    final lower = url.toLowerCase();
+    final isNetwork = uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        (uri.path.endsWith('.mp4') || uri.path.endsWith('.m3u8'));
+    final isLocalFile = !isNetwork &&
+        (lower.endsWith('.mp4') ||
+            lower.endsWith('.mkv') ||
+            lower.endsWith('.mov') ||
+            lower.endsWith('.avi') ||
+            lower.endsWith('.wmv') ||
+            lower.endsWith('.flv') ||
+            lower.endsWith('.webm'));
+
+    if (!isNetwork && !isLocalFile) {
+      // Not a playable source for the built‑in player.
       if (_videoController != null) {
         _videoController!.dispose();
         _videoController = null;
@@ -201,7 +215,11 @@ class _RoomPageState extends State<RoomPage> {
     }
 
     _videoController?.dispose();
-    _videoController = VideoPlayerController.networkUrl(uri);
+    if (isNetwork && uri != null) {
+      _videoController = VideoPlayerController.networkUrl(uri);
+    } else {
+      _videoController = VideoPlayerController.file(File(url));
+    }
     _currentVideoUrl = url;
     _initializeVideoFuture = _videoController!.initialize().then((_) {
       setState(() {});
@@ -266,7 +284,9 @@ class _RoomPageState extends State<RoomPage> {
                           ),
                         ],
                       )
-                    : (_videoController != null &&
+                    : _isYouTubeUrl(state.videoUrl!)
+                        ? YoutubePlayerView(videoUrl: state.videoUrl!)
+                        : (_videoController != null &&
                             _initializeVideoFuture != null)
                         ? FutureBuilder<void>(
                             future: _initializeVideoFuture,
@@ -614,5 +634,12 @@ class _RoomPageState extends State<RoomPage> {
         ],
       ),
     );
+  }
+
+  bool _isYouTubeUrl(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return false;
+    final host = uri.host.toLowerCase();
+    return host.contains('youtube.com') || host.contains('youtu.be');
   }
 }

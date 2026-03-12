@@ -182,21 +182,37 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     emit(const CreateRoomState());
   }
 
-  /// Validate video URL (supports YouTube, Netflix, and other common formats)
+  /// Validate video URL (supports YouTube, Twitch, Dailymotion, and other common formats)
   bool _validateUrl(String url) {
     if (url.trim().isEmpty) return false;
 
     // Basic URL validation
     final uri = Uri.tryParse(url);
+
+    // 1) Direct file paths (local) – accept common video extensions
+    final lower = url.toLowerCase().trim();
+    const exts = [
+      '.mp4',
+      '.mkv',
+      '.mov',
+      '.avi',
+      '.wmv',
+      '.flv',
+      '.webm',
+      '.m3u8',
+    ];
+    final hasVideoExt = exts.any(lower.endsWith);
+
+    // Local-style path (no scheme) but looks like a video file
+    if ((uri == null || !uri.hasScheme) && hasVideoExt) {
+      // e.g. C:\videos\movie.mp4 or /home/user/movie.mp4
+      return true;
+    }
+
     if (uri == null || !uri.hasScheme) return false;
 
     // Check for YouTube
     if (uri.host.contains('youtube.com') || uri.host.contains('youtu.be')) {
-      return true;
-    }
-
-    // Check for Netflix
-    if (uri.host.contains('netflix.com')) {
       return true;
     }
 
@@ -216,7 +232,10 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     }
 
     // Allow local file paths or other valid URLs
-    return uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https' || uri.scheme == 'file');
+    return uri.hasScheme &&
+        (uri.scheme == 'http' ||
+            uri.scheme == 'https' ||
+            uri.scheme == 'file');
   }
 
   /// Get thumbnail URL from video URL
@@ -243,7 +262,6 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
 
   /// Generate a random room ID
   String _generateRoomId() {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
     final random = DateTime.now().millisecondsSinceEpoch.toString();
     return 'room_${random.substring(random.length - 8)}';
   }
