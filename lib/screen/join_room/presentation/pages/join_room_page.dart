@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../domain/bloc/join_room_bloc.dart';
@@ -52,10 +54,32 @@ class _JoinRoomPageState extends State<JoinRoomPage> {
       ),
       body: BlocListener<JoinRoomBloc, JoinRoomState>(
         listenWhen: (previous, current) =>
-            previous.status != current.status && current.status == JoinRoomStatus.success,
-        listener: (context, state) {
+            previous.status != current.status &&
+            current.status == JoinRoomStatus.success,
+        listener: (context, state) async {
           final roomId = state.resolvedRoomId;
           if (roomId != null && roomId.isNotEmpty) {
+            // Save this room in the logged-in user's history.
+            final user = fb.FirebaseAuth.instance.currentUser;
+            if (user != null) {
+              final firestore = FirebaseFirestore.instance;
+              final roomDoc =
+                  await firestore.collection('rooms').doc(roomId).get();
+              final data = roomDoc.data() ?? {};
+              await firestore
+                  .collection('users')
+                  .doc(user.uid)
+                  .collection('rooms')
+                  .doc(roomId)
+                  .set({
+                'roomId': roomId,
+                'name': (data['name'] as String?) ?? 'Watch Room',
+                'videoUrl': (data['videoUrl'] as String?) ?? '',
+                'isHost': data['hostId'] == user.uid,
+                'lastJoinedAt': FieldValue.serverTimestamp(),
+              }, SetOptions(merge: true));
+            }
+
             context.go('/join/$roomId');
           }
         },

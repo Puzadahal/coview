@@ -23,6 +23,15 @@ class CreateRoomSuccessDialog extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    // Build a shareable link based on the current app URL.
+    // On web with hash routing this will look like:
+    //   http://host/#/join/room_xxx
+    final base = Uri.base;
+    final origin = base.origin; // scheme://host:port
+    final resolvedLink = inviteLink.startsWith('http')
+        ? inviteLink
+        : '$origin/#/join/$roomId';
+
     return Dialog(
       backgroundColor: Colors.transparent,
       child: GlassFormCard(
@@ -86,7 +95,7 @@ class CreateRoomSuccessDialog extends StatelessWidget {
           // Copyable Invite Link
           GestureDetector(
             onTap: () {
-              Clipboard.setData(ClipboardData(text: inviteLink));
+              Clipboard.setData(ClipboardData(text: resolvedLink));
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: const Row(
@@ -117,7 +126,7 @@ class CreateRoomSuccessDialog extends StatelessWidget {
                 children: [
                   Expanded(
                     child: SelectableText(
-                      inviteLink,
+                      resolvedLink,
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.secondary,

@@ -3,11 +3,16 @@ import 'package:equatable/equatable.dart';
 class RoomMessage extends Equatable {
   final String author;
   final String text;
+  final DateTime? createdAt;
 
-  const RoomMessage({required this.author, required this.text});
+  const RoomMessage({
+    required this.author,
+    required this.text,
+    this.createdAt,
+  });
 
   @override
-  List<Object?> get props => [author, text];
+  List<Object?> get props => [author, text, createdAt];
 }
 
 enum RoomStatus { viewing, loading, error }
@@ -32,10 +37,7 @@ class RoomState extends Equatable {
   factory RoomState.initial(String roomId) {
     return RoomState(
       roomId: roomId,
-      messages: const [
-        RoomMessage(author: 'Host', text: 'Welcome to the room!'),
-        RoomMessage(author: 'You', text: 'Excited to watch together.'),
-      ],
+      messages: const [],
     );
   }
 

@@ -160,7 +160,25 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
 
       await _firestore.collection('rooms').doc(roomId).set(roomData);
 
-      final inviteLink = 'https://syncview.app/join/$roomId';
+      // Store room under the host's history if logged in.
+      if (currentUser != null) {
+        final userRoomsRef = _firestore
+            .collection('users')
+            .doc(currentUser.uid)
+            .collection('rooms')
+            .doc(roomId);
+        await userRoomsRef.set({
+          'roomId': roomId,
+          'name': state.roomName.trim(),
+          'videoUrl': state.videoUrl.trim(),
+          'isHost': true,
+          'lastJoinedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+
+      // Store a relative link; the UI will turn this into a full sharable URL
+      // based on the current host (useful for localhost vs production).
+      final inviteLink = '/join/$roomId';
 
       emit(state.copyWith(
         status: CreateRoomStatus.success,

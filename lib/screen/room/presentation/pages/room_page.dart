@@ -5,12 +5,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../domain/bloc/room_bloc.dart';
 import '../../domain/bloc/room_event.dart';
 import '../../domain/bloc/room_state.dart';
 import '../widgets/youtube_player_view.dart';
+import '../../domain/room_call_service.dart';
 
 /// Coview Room screen showing synchronized playback UI and real‑time chat.
 class RoomPage extends StatefulWidget {
@@ -27,11 +29,15 @@ class _RoomPageState extends State<RoomPage> {
   VideoPlayerController? _videoController;
   Future<void>? _initializeVideoFuture;
   String? _currentVideoUrl;
+  RoomCallService? _callService;
+  MediaStream? _localCallStream;
+  final _localRenderer = RTCVideoRenderer();
 
   @override
   void dispose() {
     _messageController.dispose();
     _videoController?.dispose();
+    _localRenderer.dispose();
     super.dispose();
   }
 
@@ -408,7 +414,7 @@ class _RoomPageState extends State<RoomPage> {
             ),
           ),
           const SizedBox(height: AppConstants.spacingMedium),
-          // Playback controls row
+          // Playback + call controls row
           Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppConstants.spacingMedium,
@@ -446,18 +452,64 @@ class _RoomPageState extends State<RoomPage> {
                   icon: const Icon(Icons.forward_10),
                 ),
                 const Spacer(),
+                // Basic call controls (host/guest)
                 IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.closed_caption_outlined),
+                  tooltip: 'Start Call (Host)',
+                  onPressed: () async {
+                    _callService ??= RoomCallService(state.roomId);
+                    await _localRenderer.initialize();
+                    await _callService!.startCall();
+                    setState(() {
+                      _localCallStream = _callService!.localStream;
+                      _localRenderer.srcObject = _localCallStream;
+                    });
+                  },
+                  icon: const Icon(Icons.video_call),
                 ),
                 IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.settings_outlined),
+                  tooltip: 'Join Call (Guest)',
+                  onPressed: () async {
+                    _callService ??= RoomCallService(state.roomId);
+                    await _localRenderer.initialize();
+                    await _callService!.joinCall();
+                    setState(() {
+                      _localCallStream = _callService!.localStream;
+                      _localRenderer.srcObject = _localCallStream;
+                    });
+                  },
+                  icon: const Icon(Icons.call),
+                ),
+                IconButton(
+                  tooltip: 'End Call',
+                  onPressed: () async {
+                    await _callService?.dispose();
+                    setState(() {
+                      _localCallStream = null;
+                      _localRenderer.srcObject = null;
+                    });
+                  },
+                  icon: const Icon(Icons.call_end),
                 ),
               ],
             ),
           ),
           const SizedBox(height: AppConstants.spacingSmall),
+          if (_localCallStream != null)
+            Padding(
+              padding: const EdgeInsets.only(
+                left: AppConstants.spacingMedium,
+                right: AppConstants.spacingMedium,
+                bottom: AppConstants.spacingSmall,
+              ),
+              child: SizedBox(
+                height: 120,
+                child: ClipRRect(
+                  borderRadius:
+                      BorderRadius.circular(AppConstants.borderRadiusMedium),
+                  child: RTCVideoView(_localRenderer, mirror: true),
+                ),
+              ),
+            ),
         ],
       ),
     );
