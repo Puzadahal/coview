@@ -9,20 +9,32 @@ class FeaturesSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isSmallScreen = MediaQuery.of(context).size.width < 600;
-    
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Real-time Features',
+          'Why SyncView',
           style: TextStyle(
-            fontSize: isSmallScreen ? 24 : 28,
+            fontSize: isSmallScreen ? 24 : 30,
             fontWeight: FontWeight.bold,
             color: AppColors.textWhite,
           ),
         ),
+        const SizedBox(height: 8),
+        Text(
+          'Built for fast room creation and shared viewing sessions.',
+          style: TextStyle(
+            fontSize: isSmallScreen ? 14 : 16,
+            color: AppColors.textWhite.withValues(alpha: 0.75),
+          ),
+        ),
         const SizedBox(height: 24),
-        ..._buildFeatures(isSmallScreen),
+        Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: _buildFeatures(isSmallScreen),
+        ),
       ],
     );
   }
@@ -37,7 +49,7 @@ class FeaturesSection extends StatelessWidget {
       {
         'icon': Icons.chat_bubble_outline,
         'title': 'Live Interaction',
-        'description': 'Integrated text chat or voice call features.',
+        'description': 'Real-time chat alongside your video room.',
       },
       {
         'icon': Icons.lock_outline,
@@ -47,53 +59,55 @@ class FeaturesSection extends StatelessWidget {
     ];
 
     return features.map((feature) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.primaryDark.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-                border: Border.all(
-                  color: AppColors.textWhite.withValues(alpha: 0.2),
-                  width: 1,
+      return SizedBox(
+        width: isSmallScreen ? double.infinity : 320,
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppColors.primaryDarkVariant.withValues(alpha: 0.62),
+            borderRadius:
+                BorderRadius.circular(AppConstants.borderRadiusLarge),
+            border: Border.all(
+              color: AppColors.textWhite.withValues(alpha: 0.14),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.secondary.withValues(alpha: 0.12),
+                  borderRadius:
+                      BorderRadius.circular(AppConstants.borderRadiusMedium),
+                ),
+                child: Icon(
+                  feature['icon'] as IconData,
+                  color: AppColors.secondary,
+                  size: isSmallScreen ? 22 : 24,
                 ),
               ),
-              child: Icon(
-                feature['icon'] as IconData,
-                color: const Color(0xFF00D9FF), // Teal accent
-                size: isSmallScreen ? 24 : 28,
+              const SizedBox(height: 14),
+              Text(
+                feature['title'] as String,
+                style: TextStyle(
+                  fontSize: isSmallScreen ? 18 : 19,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textWhite,
+                ),
               ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    feature['title'] as String,
-                    style: TextStyle(
-                      fontSize: isSmallScreen ? 18 : 20,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textWhite,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    feature['description'] as String,
-                    style: TextStyle(
-                      fontSize: isSmallScreen ? 14 : 16,
-                      color: AppColors.textWhite.withValues(alpha: 0.8),
-                      height: 1.4,
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 6),
+              Text(
+                feature['description'] as String,
+                style: TextStyle(
+                  fontSize: isSmallScreen ? 14 : 15,
+                  color: AppColors.textWhite.withValues(alpha: 0.8),
+                  height: 1.35,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }).toList();

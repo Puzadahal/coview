@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:coview/config/routes/app_router.dart';
 import 'package:coview/config/theme/app_theme.dart';
+import 'package:coview/core/language/domain/bloc/app_language_cubit.dart';
 import 'package:coview/core/theme/domain/bloc/theme_bloc.dart';
 import 'package:coview/core/theme/domain/bloc/theme_event.dart';
 import 'package:coview/core/theme/domain/bloc/theme_state.dart';
@@ -21,8 +22,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => ThemeBloc()..add(const ThemeInitialized()),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(
+          create: (context) => ThemeBloc()..add(const ThemeInitialized()),
+        ),
+        BlocProvider(
+          create: (context) => AppLanguageCubit()..initialize(),
+        ),
+      ],
       child: BlocBuilder<ThemeBloc, ThemeState>(
         builder: (context, state) {
           return MaterialApp.router(

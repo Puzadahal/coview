@@ -4,6 +4,8 @@ import '../../screen/auth/presentation/pages/login_page.dart';
 import '../../screen/auth/presentation/pages/signup_page.dart';
 import '../../screen/auth/presentation/pages/auth_choice_page.dart';
 import '../../screen/home_screen/presentation/pages/home_screen.dart';
+import '../../screen/home_screen/presentation/pages/about_page.dart';
+import '../../screen/home_screen/presentation/pages/recommendations_page.dart';
 import '../../screen/profile/presentation/pages/profile_page.dart';
 import '../../screen/create_room/presentation/pages/create_room_page.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -47,6 +49,16 @@ final GoRouter appRouter = GoRouter(
       path: '/home',
       name: 'home',
       builder: (context, state) => const HomeScreen(),
+    ),
+    GoRoute(
+      path: '/about',
+      name: 'about',
+      builder: (context, state) => const AboutPage(),
+    ),
+    GoRoute(
+      path: '/recommendations',
+      name: 'recommendations',
+      builder: (context, state) => const RecommendationsPage(),
     ),
     GoRoute(
       path: '/profile',

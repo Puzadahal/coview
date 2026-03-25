@@ -10,7 +10,7 @@ class TrustIndicators extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isSmallScreen = MediaQuery.of(context).size.width < 600;
-    
+
     return Column(
       children: [
         // Platform icons
@@ -29,7 +29,7 @@ class TrustIndicators extends StatelessWidget {
           alignment: WrapAlignment.center,
           children: _buildPlatformIcons(context),
         ),
-        const SizedBox(height: 48),
+        const SizedBox(height: 40),
         // How it Works section
         Text(
           'How it Works',
@@ -39,8 +39,12 @@ class TrustIndicators extends StatelessWidget {
             color: AppColors.textWhite,
           ),
         ),
-        const SizedBox(height: 32),
-        ..._buildHowItWorksSteps(isSmallScreen),
+        const SizedBox(height: 22),
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: _buildHowItWorksSteps(isSmallScreen),
+        ),
       ],
     );
   }
@@ -81,15 +85,15 @@ class TrustIndicators extends StatelessWidget {
               context.go('/create-room');
             },
             child: Container(
-              width: 80,
-              height: 80,
-              padding: const EdgeInsets.all(16),
+              width: 86,
+              height: 86,
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.textWhite.withValues(alpha: 0.1),
+                color: AppColors.primaryDarkVariant.withValues(alpha: 0.65),
                 borderRadius:
                     BorderRadius.circular(AppConstants.borderRadiusMedium),
                 border: Border.all(
-                  color: AppColors.textWhite.withValues(alpha: 0.2),
+                  color: AppColors.secondary.withValues(alpha: 0.3),
                   width: 1,
                 ),
               ),
@@ -151,91 +155,71 @@ class TrustIndicators extends StatelessWidget {
     ];
 
     return steps.asMap().entries.map((entry) {
-      final index = entry.key;
       final step = entry.value;
-      final isLast = index == steps.length - 1;
 
-      return Padding(
-        padding: EdgeInsets.only(bottom: isLast ? 0 : 24),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Step number circle
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    const Color(0xFF00D9FF), 
-                    const Color(0xFF7B2CBF),
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF00D9FF).withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Center(
-                child: Text(
-                  step['number'] as String,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textWhite,
-                  ),
-                ),
-              ),
+      return SizedBox(
+        width: isSmallScreen ? double.infinity : 250,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.primaryDarkVariant.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.textWhite.withValues(alpha: 0.12),
             ),
-            const SizedBox(width: 20),
-            // Step content
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      Icon(
-                        step['icon'] as IconData,
-                        color: const Color(0xFF00D9FF),
-                        size: 24,
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [AppColors.secondary, AppColors.primaryAccent],
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        step['title'] as String,
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 18 : 20,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textWhite,
-                        ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      step['number'] as String,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textWhite,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    step['description'] as String,
-                    style: TextStyle(
-                      fontSize: isSmallScreen ? 14 : 16,
-                      color: AppColors.textWhite.withValues(alpha: 0.8),
                     ),
                   ),
+                  const SizedBox(width: 10),
+                  Icon(
+                    step['icon'] as IconData,
+                    color: AppColors.secondary,
+                    size: 20,
+                  ),
                 ],
               ),
-            ),
-            // Arrow (except for last step)
-            if (!isLast) ...[
-              const SizedBox(width: 16),
-              Icon(
-                Icons.arrow_forward_ios,
-                color: AppColors.textWhite.withValues(alpha: 0.5),
-                size: 16,
+              const SizedBox(height: 12),
+              Text(
+                step['title'] as String,
+                style: TextStyle(
+                  fontSize: isSmallScreen ? 16 : 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textWhite,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                step['description'] as String,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textWhite.withValues(alpha: 0.8),
+                  height: 1.35,
+                ),
               ),
             ],
-          ],
+          ),
         ),
       );
     }).toList();
