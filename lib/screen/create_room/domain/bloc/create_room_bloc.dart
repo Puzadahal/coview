@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../../../../core/constants/app_constants.dart';
 import 'create_room_event.dart';
@@ -138,7 +139,24 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     emit(state.copyWith(status: CreateRoomStatus.loading));
 
     try {
-      final fb.User? currentUser = _auth.currentUser;
+      fb.User? currentUser = _auth.currentUser;
+
+      // Firestore rules typically require request.auth != null to create a room.
+      // Guests are not signed in until we use anonymous auth.
+      if (currentUser == null) {
+        try {
+          final cred = await _auth.signInAnonymously();
+          currentUser = cred.user;
+        } on fb.FirebaseAuthException catch (e) {
+          emit(state.copyWith(
+            status: CreateRoomStatus.failure,
+            errorMessage: e.code == 'operation-not-allowed'
+                ? 'Anonymous sign-in is disabled. Enable it in Firebase Console → Authentication → Sign-in method, or log in with Google.'
+                : 'Could not start a guest session (${e.message ?? e.code}).',
+          ));
+          return;
+        }
+      }
 
       final roomId = _generateRoomId();
 
@@ -192,11 +210,31 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
         createdRoomId: roomId,
         inviteLink: inviteLink,
       ));
-    } catch (e) {
+    } on FirebaseException catch (e) {
+      debugPrint('CreateRoom Firestore/Auth error: ${e.code} ${e.message}');
       emit(state.copyWith(
         status: CreateRoomStatus.failure,
-        errorMessage: 'Failed to create room. Please try again.',
+        errorMessage: _firestoreErrorMessage(e),
       ));
+    } catch (e, st) {
+      debugPrint('CreateRoom error: $e\n$st');
+      emit(state.copyWith(
+        status: CreateRoomStatus.failure,
+        errorMessage: 'Failed to create room: $e',
+      ));
+    }
+  }
+
+  String _firestoreErrorMessage(FirebaseException e) {
+    switch (e.code) {
+      case 'permission-denied':
+        return 'Permission denied. Publish the Firestore rules (rooms + users/.../rooms) and try again.';
+      case 'unavailable':
+        return 'Network error. Check your connection and try again.';
+      default:
+        return e.message?.isNotEmpty == true
+            ? '${e.code}: ${e.message}'
+            : 'Failed to create room (${e.code}).';
     }
   }
 

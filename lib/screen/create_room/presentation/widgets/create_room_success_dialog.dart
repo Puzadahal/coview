@@ -5,6 +5,21 @@ import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/widgets/glass_form_card.dart';
 
+/// Full invite URL on web; on mobile/desktop `Uri.base` is often `file://` and
+/// has no [Uri.origin] — use room id so friends can paste it in Join Room.
+String buildShareableInviteLink({
+  required String inviteLink,
+  required String roomId,
+}) {
+  if (inviteLink.startsWith('http')) return inviteLink;
+  final base = Uri.base;
+  final scheme = base.scheme.toLowerCase();
+  if (scheme == 'http' || scheme == 'https') {
+    return '${base.origin}/#/join/$roomId';
+  }
+  return roomId;
+}
+
 /// Success Dialog shown after room creation with copyable invite link
 class CreateRoomSuccessDialog extends StatelessWidget {
   final String roomName;
@@ -23,14 +38,12 @@ class CreateRoomSuccessDialog extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Build a shareable link based on the current app URL.
-    // On web with hash routing this will look like:
-    //   http://host/#/join/room_xxx
-    final base = Uri.base;
-    final origin = base.origin; // scheme://host:port
-    final resolvedLink = inviteLink.startsWith('http')
-        ? inviteLink
-        : '$origin/#/join/$roomId';
+    final resolvedLink = buildShareableInviteLink(
+      inviteLink: inviteLink,
+      roomId: roomId,
+    );
+    final isRoomCodeOnly =
+        !resolvedLink.startsWith('http') && roomId.isNotEmpty;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -81,7 +94,9 @@ class CreateRoomSuccessDialog extends StatelessWidget {
 
           // Invite Link Section
           Text(
-            'Share this link to invite friends:',
+            isRoomCodeOnly
+                ? 'Share this room code (friends paste it in Join Room):'
+                : 'Share this link to invite friends:',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
