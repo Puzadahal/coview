@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart'
+    show YoutubePlayerController;
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../domain/bloc/room_bloc.dart';
@@ -45,6 +47,15 @@ class _RoomPageState extends State<RoomPage> {
     final text = _messageController.text;
     context.read<RoomBloc>().add(RoomMessageSent(text));
     _messageController.clear();
+  }
+
+  Future<void> _openYouTubeExternally(String url) async {
+    final id = YoutubePlayerController.convertUrlToId(url);
+    if (id == null || id.isEmpty) return;
+    final uri = Uri.parse('https://www.youtube.com/watch?v=$id');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   @override
@@ -221,7 +232,7 @@ class _RoomPageState extends State<RoomPage> {
     }
 
     _videoController?.dispose();
-    if (isNetwork && uri != null) {
+    if (isNetwork) {
       _videoController = VideoPlayerController.networkUrl(uri);
     } else {
       _videoController = VideoPlayerController.file(File(url));
@@ -253,244 +264,305 @@ class _RoomPageState extends State<RoomPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Video surface
+          // Video surface — YouTube fills the box (no Center) so WebView gets stable size.
           AspectRatio(
             aspectRatio: 16 / 9,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(
-                  AppConstants.borderRadiusLarge,
-                ),
-                gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF6C5CE7),
-                    Color(0xFF00D9FF),
-                  ],
-                ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(
+                AppConstants.borderRadiusLarge,
               ),
-              child: Center(
-                child: state.videoUrl == null || state.videoUrl!.isEmpty
-                    ? Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.play_circle_fill,
-                            size: 72,
-                            color: AppColors.textWhite
-                                .withValues(alpha: 0.95),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'No video URL configured for this room.',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: AppColors.textWhite,
-                              fontWeight: FontWeight.w600,
+              child: state.videoUrl == null || state.videoUrl!.isEmpty
+                  ? Container(
+                      width: double.infinity,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Color(0xFF6C5CE7),
+                            Color(0xFF00D9FF),
+                          ],
+                        ),
+                      ),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.play_circle_fill,
+                              size: 72,
+                              color: AppColors.textWhite
+                                  .withValues(alpha: 0.95),
                             ),
-                            textAlign: TextAlign.center,
+                            const SizedBox(height: 12),
+                            Text(
+                              'No video URL configured for this room.',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: AppColors.textWhite,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : _isYouTubeUrl(state.videoUrl!)
+                      ? YoutubePlayerView(videoUrl: state.videoUrl!)
+                      : Container(
+                          width: double.infinity,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Color(0xFF6C5CE7),
+                                Color(0xFF00D9FF),
+                              ],
+                            ),
                           ),
-                        ],
-                      )
-                    : _isYouTubeUrl(state.videoUrl!)
-                        ? YoutubePlayerView(videoUrl: state.videoUrl!)
-                        : (_videoController != null &&
-                            _initializeVideoFuture != null)
-                        ? FutureBuilder<void>(
-                            future: _initializeVideoFuture,
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState !=
-                                  ConnectionState.done) {
-                                return const CircularProgressIndicator(
-                                  valueColor:
-                                      AlwaysStoppedAnimation<Color>(
-                                    AppColors.textWhite,
-                                  ),
-                                );
-                              }
-                              return Stack(
-                                alignment: Alignment.bottomCenter,
-                                children: [
-                                  AspectRatio(
-                                    aspectRatio: _videoController!
-                                        .value.aspectRatio,
-                                    child: VideoPlayer(_videoController!),
-                                  ),
-                                  IconButton(
-                                    iconSize: 40,
-                                    color: AppColors.textWhite,
-                                    icon: Icon(
-                                      _videoController!.value.isPlaying
-                                          ? Icons.pause_circle_filled
-                                          : Icons.play_circle_fill,
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        if (_videoController!
-                                            .value.isPlaying) {
-                                          _videoController!.pause();
-                                        } else {
-                                          _videoController!.play();
-                                        }
-                                      });
+                          child: Center(
+                            child: (_videoController != null &&
+                                    _initializeVideoFuture != null)
+                                ? FutureBuilder<void>(
+                                    future: _initializeVideoFuture,
+                                    builder: (context, snapshot) {
+                                      if (snapshot.connectionState !=
+                                          ConnectionState.done) {
+                                        return const CircularProgressIndicator(
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                            AppColors.textWhite,
+                                          ),
+                                        );
+                                      }
+                                      return Stack(
+                                        alignment: Alignment.bottomCenter,
+                                        children: [
+                                          AspectRatio(
+                                            aspectRatio: _videoController!
+                                                .value.aspectRatio,
+                                            child: VideoPlayer(
+                                              _videoController!,
+                                            ),
+                                          ),
+                                          IconButton(
+                                            iconSize: 40,
+                                            color: AppColors.textWhite,
+                                            icon: Icon(
+                                              _videoController!.value.isPlaying
+                                                  ? Icons.pause_circle_filled
+                                                  : Icons.play_circle_fill,
+                                            ),
+                                            onPressed: () {
+                                              setState(() {
+                                                if (_videoController!
+                                                    .value.isPlaying) {
+                                                  _videoController!.pause();
+                                                } else {
+                                                  _videoController!.play();
+                                                }
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      );
                                     },
-                                  ),
-                                ],
-                              );
-                            },
-                          )
-                        : Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.play_circle_fill,
-                                size: 72,
-                                color: AppColors.textWhite
-                                    .withValues(alpha: 0.95),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Open video in browser / app',
-                                style:
-                                    theme.textTheme.titleMedium?.copyWith(
-                                  color: AppColors.textWhite,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppConstants.spacingMedium,
-                                ),
-                                child: SelectableText(
-                                  state.videoUrl!,
-                                  style: theme.textTheme.bodySmall
-                                      ?.copyWith(
-                                    color: AppColors.textWhite
-                                        .withValues(alpha: 0.9),
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton.icon(
-                                onPressed: () async {
-                                  final uri =
-                                      Uri.tryParse(state.videoUrl!);
-                                  if (uri == null) {
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Invalid video URL. Please recreate the room with a valid link.',
+                                  )
+                                : Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.play_circle_fill,
+                                        size: 72,
+                                        color: AppColors.textWhite
+                                            .withValues(alpha: 0.95),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'Open video in browser / app',
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
+                                          color: AppColors.textWhite,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                    );
-                                    return;
-                                  }
-                                  final canOpen =
-                                      await canLaunchUrl(uri);
-                                  if (!canOpen) {
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Cannot open this video link on this device.',
+                                      const SizedBox(height: 4),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal:
+                                              AppConstants.spacingMedium,
+                                        ),
+                                        child: SelectableText(
+                                          state.videoUrl!,
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                            color: AppColors.textWhite
+                                                .withValues(alpha: 0.9),
+                                          ),
+                                          textAlign: TextAlign.center,
                                         ),
                                       ),
-                                    );
-                                    return;
-                                  }
-                                  await launchUrl(
-                                    uri,
-                                    mode: LaunchMode
-                                        .externalApplication,
-                                  );
-                                },
-                                icon: const Icon(Icons.open_in_new),
-                                label: const Text('Open Video'),
-                              ),
-                            ],
+                                      const SizedBox(height: 16),
+                                      ElevatedButton.icon(
+                                        onPressed: () async {
+                                          final uri =
+                                              Uri.tryParse(state.videoUrl!);
+                                          if (uri == null) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'Invalid video URL. Please recreate the room with a valid link.',
+                                                ),
+                                              ),
+                                            );
+                                            return;
+                                          }
+                                          final canOpen =
+                                              await canLaunchUrl(uri);
+                                          if (!canOpen) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'Cannot open this video link on this device.',
+                                                ),
+                                              ),
+                                            );
+                                            return;
+                                          }
+                                          await launchUrl(
+                                            uri,
+                                            mode: LaunchMode
+                                                .externalApplication,
+                                          );
+                                        },
+                                        icon: const Icon(Icons.open_in_new),
+                                        label: const Text('Open Video'),
+                                      ),
+                                    ],
+                                  ),
                           ),
-              ),
+                        ),
             ),
           ),
+          if (state.videoUrl != null &&
+              state.videoUrl!.isNotEmpty &&
+              _isYouTubeUrl(state.videoUrl!))
+            Padding(
+              padding: const EdgeInsets.only(top: 8, left: 4, right: 4),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => _openYouTubeExternally(state.videoUrl!),
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  label: const Text('Open in YouTube'),
+                ),
+              ),
+            ),
           const SizedBox(height: AppConstants.spacingMedium),
-          // Playback + call controls row
+          // Playback + call controls row (scroll on narrow screens)
           Padding(
             padding: const EdgeInsets.symmetric(
-              horizontal: AppConstants.spacingMedium,
+              horizontal: AppConstants.spacingSmall,
               vertical: AppConstants.spacingSmall,
             ),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.replay_10),
-                ),
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.skip_previous),
-                ),
-                Container(
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
                     onPressed: () {},
-                    icon: const Icon(
-                      Icons.play_arrow,
-                      color: AppColors.textWhite,
+                    icon: const Icon(Icons.replay_10),
+                  ),
+                  IconButton(
+                    onPressed: () {},
+                    icon: const Icon(Icons.skip_previous),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      onPressed: () {},
+                      icon: const Icon(
+                        Icons.play_arrow,
+                        color: AppColors.textWhite,
+                      ),
                     ),
                   ),
-                ),
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.skip_next),
-                ),
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.forward_10),
-                ),
-                const Spacer(),
-                // Basic call controls (host/guest)
-                IconButton(
-                  tooltip: 'Start Call (Host)',
-                  onPressed: () async {
-                    _callService ??= RoomCallService(state.roomId);
-                    await _localRenderer.initialize();
-                    await _callService!.startCall();
-                    setState(() {
-                      _localCallStream = _callService!.localStream;
-                      _localRenderer.srcObject = _localCallStream;
-                    });
-                  },
-                  icon: const Icon(Icons.video_call),
-                ),
-                IconButton(
-                  tooltip: 'Join Call (Guest)',
-                  onPressed: () async {
-                    _callService ??= RoomCallService(state.roomId);
-                    await _localRenderer.initialize();
-                    await _callService!.joinCall();
-                    setState(() {
-                      _localCallStream = _callService!.localStream;
-                      _localRenderer.srcObject = _localCallStream;
-                    });
-                  },
-                  icon: const Icon(Icons.call),
-                ),
-                IconButton(
-                  tooltip: 'End Call',
-                  onPressed: () async {
-                    await _callService?.dispose();
-                    setState(() {
-                      _localCallStream = null;
-                      _localRenderer.srcObject = null;
-                    });
-                  },
-                  icon: const Icon(Icons.call_end),
-                ),
-              ],
+                  IconButton(
+                    onPressed: () {},
+                    icon: const Icon(Icons.skip_next),
+                  ),
+                  IconButton(
+                    onPressed: () {},
+                    icon: const Icon(Icons.forward_10),
+                  ),
+                  const SizedBox(width: 12),
+                  IconButton(
+                    tooltip: 'Start Call (Host)',
+                    onPressed: () async {
+                      try {
+                        _callService ??= RoomCallService(state.roomId);
+                        await _localRenderer.initialize();
+                        await _callService!.startCall();
+                        if (!mounted) return;
+                        setState(() {
+                          _localCallStream = _callService!.localStream;
+                          _localRenderer.srcObject = _localCallStream;
+                        });
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Camera/mic: allow permissions in System settings. ($e)',
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.video_call),
+                  ),
+                  IconButton(
+                    tooltip: 'Join Call (Guest)',
+                    onPressed: () async {
+                      try {
+                        _callService ??= RoomCallService(state.roomId);
+                        await _localRenderer.initialize();
+                        await _callService!.joinCall();
+                        if (!mounted) return;
+                        setState(() {
+                          _localCallStream = _callService!.localStream;
+                          _localRenderer.srcObject = _localCallStream;
+                        });
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Camera/mic: allow permissions in System settings. ($e)',
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.call),
+                  ),
+                  IconButton(
+                    tooltip: 'End Call',
+                    onPressed: () async {
+                      await _callService?.dispose();
+                      if (!mounted) return;
+                      setState(() {
+                        _localCallStream = null;
+                        _localRenderer.srcObject = null;
+                      });
+                    },
+                    icon: const Icon(Icons.call_end),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: AppConstants.spacingSmall),
