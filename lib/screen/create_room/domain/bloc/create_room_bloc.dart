@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
@@ -160,20 +161,26 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
 
       await _firestore.collection('rooms').doc(roomId).set(roomData);
 
-      // Store room under the host's history if logged in.
+      // Store room under the host's history if logged in. Kept separate from the
+      // main room write so a denied write here (e.g. missing rules for
+      // users/{uid}/rooms/{roomId}) does not fail room creation.
       if (currentUser != null) {
-        final userRoomsRef = _firestore
-            .collection('users')
-            .doc(currentUser.uid)
-            .collection('rooms')
-            .doc(roomId);
-        await userRoomsRef.set({
-          'roomId': roomId,
-          'name': state.roomName.trim(),
-          'videoUrl': state.videoUrl.trim(),
-          'isHost': true,
-          'lastJoinedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        try {
+          final userRoomsRef = _firestore
+              .collection('users')
+              .doc(currentUser.uid)
+              .collection('rooms')
+              .doc(roomId);
+          await userRoomsRef.set({
+            'roomId': roomId,
+            'name': state.roomName.trim(),
+            'videoUrl': state.videoUrl.trim(),
+            'isHost': true,
+            'lastJoinedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        } catch (e, st) {
+          debugPrint('CreateRoom: could not save user room history: $e\n$st');
+        }
       }
 
       // Store a relative link; the UI will turn this into a full sharable URL

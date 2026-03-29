@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -62,22 +63,26 @@ class _JoinRoomPageState extends State<JoinRoomPage> {
             // Save this room in the logged-in user's history.
             final user = fb.FirebaseAuth.instance.currentUser;
             if (user != null) {
-              final firestore = FirebaseFirestore.instance;
-              final roomDoc =
-                  await firestore.collection('rooms').doc(roomId).get();
-              final data = roomDoc.data() ?? {};
-              await firestore
-                  .collection('users')
-                  .doc(user.uid)
-                  .collection('rooms')
-                  .doc(roomId)
-                  .set({
-                'roomId': roomId,
-                'name': (data['name'] as String?) ?? 'Watch Room',
-                'videoUrl': (data['videoUrl'] as String?) ?? '',
-                'isHost': data['hostId'] == user.uid,
-                'lastJoinedAt': FieldValue.serverTimestamp(),
-              }, SetOptions(merge: true));
+              try {
+                final firestore = FirebaseFirestore.instance;
+                final roomDoc =
+                    await firestore.collection('rooms').doc(roomId).get();
+                final data = roomDoc.data() ?? {};
+                await firestore
+                    .collection('users')
+                    .doc(user.uid)
+                    .collection('rooms')
+                    .doc(roomId)
+                    .set({
+                  'roomId': roomId,
+                  'name': (data['name'] as String?) ?? 'Watch Room',
+                  'videoUrl': (data['videoUrl'] as String?) ?? '',
+                  'isHost': data['hostId'] == user.uid,
+                  'lastJoinedAt': FieldValue.serverTimestamp(),
+                }, SetOptions(merge: true));
+              } catch (e, st) {
+                debugPrint('JoinRoom: could not save user room history: $e\n$st');
+              }
             }
 
             context.go('/join/$roomId');

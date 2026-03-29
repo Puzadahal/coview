@@ -33,40 +33,61 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900;
+    final useCompactNav = width < 820;
     return BlocBuilder<AppLanguageCubit, String>(
       builder: (context, selectedLanguage) {
         return Scaffold(
           backgroundColor: AppColors.primaryDark,
+          drawer: useCompactNav
+              ? _HomeDrawer(
+                  selectedLanguage: selectedLanguage,
+                  tr: tr,
+                  onLanguageChanged: (code) =>
+                      context.read<AppLanguageCubit>().setLanguage(code),
+                )
+              : null,
           appBar: AppBar(
-        backgroundColor: AppColors.primaryDark,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: Row(
-          children: [
-            const Text('SyncView', style: TextStyle(fontWeight: FontWeight.w800)),
-            const SizedBox(width: 16),
-            _NavLink(label: tr(selectedLanguage, 'home'), onTap: () => context.go('/home')),
-            _NavLink(label: tr(selectedLanguage, 'about'), onTap: () => context.go('/about')),
-            _LanguageMenu(
-              label: tr(selectedLanguage, 'language'),
-              current: selectedLanguage,
-              onChanged: (value) => context.read<AppLanguageCubit>().setLanguage(value),
-            ),
-            _NavLink(
-              label: tr(selectedLanguage, 'recommendations'),
-              onTap: () => context.go('/recommendations'),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_outline),
-            onPressed: () => context.go('/profile'),
+            backgroundColor: AppColors.primaryDark,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            titleSpacing: useCompactNav ? 8 : 16,
+            title: useCompactNav
+                ? const Text('SyncView', style: TextStyle(fontWeight: FontWeight.w800))
+                : Row(
+                    children: [
+                      const Text('SyncView', style: TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(width: 16),
+                      _NavLink(
+                        label: tr(selectedLanguage, 'home'),
+                        onTap: () => context.go('/home'),
+                      ),
+                      _NavLink(
+                        label: tr(selectedLanguage, 'about'),
+                        onTap: () => context.go('/about'),
+                      ),
+                      _LanguageMenu(
+                        label: tr(selectedLanguage, 'language'),
+                        current: selectedLanguage,
+                        onChanged: (value) =>
+                            context.read<AppLanguageCubit>().setLanguage(value),
+                      ),
+                      _NavLink(
+                        label: tr(selectedLanguage, 'recommendations'),
+                        onTap: () => context.go('/recommendations'),
+                      ),
+                    ],
+                  ),
+            actions: [
+              IconButton(
+                tooltip: 'Profile',
+                icon: const Icon(Icons.person_outline),
+                onPressed: () => context.go('/profile'),
+              ),
+              const SizedBox(width: 4),
+            ],
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
           body: BlocBuilder<HomeBloc, HomeState>(
         builder: (context, state) {
           return Container(
@@ -127,6 +148,98 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
   }
 }
 
+class _HomeDrawer extends StatelessWidget {
+  final String selectedLanguage;
+  final String Function(String lang, String key) tr;
+  final ValueChanged<String> onLanguageChanged;
+
+  const _HomeDrawer({
+    required this.selectedLanguage,
+    required this.tr,
+    required this.onLanguageChanged,
+  });
+
+  static const _langs = {'en': 'English', 'ne': 'Nepali', 'hi': 'Hindi'};
+
+  @override
+  Widget build(BuildContext context) {
+    void closeThen(VoidCallback fn) {
+      Navigator.of(context).pop();
+      fn();
+    }
+
+    return Drawer(
+      backgroundColor: const Color(0xFF191D44),
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+              child: Text(
+                'SyncView',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.95),
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const Divider(height: 1, color: Color(0x33FFFFFF)),
+            ListTile(
+              leading: const Icon(Icons.home_outlined, color: Colors.white),
+              title: Text(tr(selectedLanguage, 'home'), style: const TextStyle(color: Colors.white)),
+              onTap: () => closeThen(() => context.go('/home')),
+            ),
+            ListTile(
+              leading: const Icon(Icons.info_outline, color: Colors.white),
+              title: Text(tr(selectedLanguage, 'about'), style: const TextStyle(color: Colors.white)),
+              onTap: () => closeThen(() => context.go('/about')),
+            ),
+            ListTile(
+              leading: const Icon(Icons.recommend_outlined, color: Colors.white),
+              title: Text(tr(selectedLanguage, 'recommendations'), style: const TextStyle(color: Colors.white)),
+              onTap: () => closeThen(() => context.go('/recommendations')),
+            ),
+            const Divider(height: 1, color: Color(0x33FFFFFF)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Text(
+                tr(selectedLanguage, 'language'),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.65),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ..._langs.entries.map(
+              (e) => RadioListTile<String>(
+                value: e.key,
+                groupValue: selectedLanguage,
+                onChanged: (v) {
+                  if (v != null) {
+                    Navigator.of(context).pop();
+                    onLanguageChanged(v);
+                  }
+                },
+                activeColor: AppColors.secondary,
+                title: Text(e.value, style: const TextStyle(color: Colors.white)),
+              ),
+            ),
+            const Divider(height: 1, color: Color(0x33FFFFFF)),
+            ListTile(
+              leading: const Icon(Icons.person_outline, color: Colors.white),
+              title: Text('Profile', style: const TextStyle(color: Colors.white)),
+              onTap: () => closeThen(() => context.go('/profile')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _NavLink extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
@@ -136,6 +249,11 @@ class _NavLink extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextButton(
       onPressed: onTap,
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
       child: Text(
         label,
         style: TextStyle(color: Colors.white.withValues(alpha: 0.85)),
