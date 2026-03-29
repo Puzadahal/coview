@@ -13,7 +13,7 @@ class AuthChoicePage extends StatelessWidget {
     final size = MediaQuery.of(context).size;
     final isDark = theme.brightness == Brightness.dark;
 
-    final logoSize = size.width.clamp(90, 150);
+    final double logoSize = size.width.clamp(90.0, 150.0).toDouble();
 
     return Scaffold(
       backgroundColor:
@@ -37,7 +37,7 @@ class AuthChoicePage extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         SizedBox(
-                          height: logoSize as double,
+                          height: logoSize,
                           child: Image.asset(
                             'assets/logo/logo.png',
                             fit: BoxFit.contain,
