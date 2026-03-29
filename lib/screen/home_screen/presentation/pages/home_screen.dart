@@ -333,17 +333,24 @@ class _HeroSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: isDesktop ? 62 : 40,
-            fontWeight: FontWeight.w800,
-            height: 1.0,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            title,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: isDesktop ? 62 : 36,
+              fontWeight: FontWeight.w800,
+              height: 1.05,
+            ),
           ),
         ),
         const SizedBox(height: 10),
-        Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.8))),
+        Text(
+          subtitle,
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+        ),
         const SizedBox(height: 16),
         Wrap(
           spacing: 10,
@@ -391,9 +398,19 @@ class _SimpleHeader extends StatelessWidget {
   const _SimpleHeader({required this.title});
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w800),
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(
+        title,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 30,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
@@ -407,32 +424,58 @@ class _HowCards extends StatelessWidget {
       ('2', 'Share invite link', 'Friends join instantly from browser.'),
       ('3', 'Stream + chat live', 'Watch together and talk in real time.'),
     ];
-    return Wrap(
-      spacing: 14,
-      runSpacing: 14,
-      children: cards
-          .map(
-            (c) => Container(
-              width: 320,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF191D44),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(c.$1, style: const TextStyle(color: AppColors.secondary, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text(c.$2, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  Text(c.$3, style: TextStyle(color: Colors.white.withValues(alpha: 0.78))),
-                ],
-              ),
-            ),
-          )
-          .toList(),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cardW = (constraints.maxWidth - 14).clamp(200.0, 320.0);
+        return Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: cards
+              .map(
+                (c) => SizedBox(
+                  width: cardW,
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF191D44),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.12),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          c.$1,
+                          style: const TextStyle(
+                            color: AppColors.secondary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          c.$2,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          c.$3,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.78),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+        );
+      },
     );
   }
 }
@@ -491,12 +534,44 @@ class _Footer extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
-      child: Row(
-        children: [
-          Text('2026 SyncView', style: TextStyle(color: Colors.white.withValues(alpha: 0.72))),
-          const Spacer(),
-          Text(tagline, style: TextStyle(color: Colors.white.withValues(alpha: 0.72))),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final narrow = constraints.maxWidth < 420;
+          if (narrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '2026 SyncView',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.72)),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  tagline,
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.72)),
+                ),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Flexible(
+                child: Text(
+                  '2026 SyncView',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.72)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  tagline,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.72)),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

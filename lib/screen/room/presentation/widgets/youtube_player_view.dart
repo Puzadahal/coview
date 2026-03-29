@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:youtube_player_iframe/youtube_player_iframe.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
-/// Embeds YouTube via iframe. Some videos show error 150/152 in embeds (owner
-/// disabled embedding, age/region, etc.) — we offer “Open in YouTube”.
+import '../../../../config/colors/app_colors.dart';
+
+/// In-app YouTube playback (no external YouTube app / browser).
 class YoutubePlayerView extends StatefulWidget {
   final String videoUrl;
 
@@ -14,116 +14,122 @@ class YoutubePlayerView extends StatefulWidget {
 }
 
 class _YoutubePlayerViewState extends State<YoutubePlayerView> {
-  late final YoutubePlayerController _controller;
-  late final String _videoId;
+  YoutubePlayerController? _controller;
+  String _videoId = '';
 
   @override
   void initState() {
     super.initState();
-    _videoId = YoutubePlayerController.convertUrlToId(widget.videoUrl) ?? '';
+    _applyUrl(widget.videoUrl);
+  }
 
-    _controller = YoutubePlayerController.fromVideoId(
-      videoId: _videoId,
-      // Tap-to-play avoids autoplay policy issues on mobile WebViews.
-      autoPlay: false,
-      params: const YoutubePlayerParams(
-        showFullscreenButton: true,
-        showControls: true,
-        enableKeyboard: true,
-        playsInline: true,
-        origin: 'https://www.youtube.com',
+  @override
+  void didUpdateWidget(YoutubePlayerView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.videoUrl != widget.videoUrl) {
+      _disposeController();
+      _applyUrl(widget.videoUrl);
+    }
+  }
+
+  void _applyUrl(String url) {
+    final id = YoutubePlayer.convertUrlToId(url) ?? '';
+    if (id.length != 11) {
+      _videoId = '';
+      return;
+    }
+    _videoId = id;
+    _controller = YoutubePlayerController(
+      initialVideoId: id,
+      flags: const YoutubePlayerFlags(
+        autoPlay: true,
+        mute: false,
+        enableCaption: true,
+        loop: false,
+        isLive: false,
+        controlsVisibleAtStart: false,
       ),
-    );
+    )..addListener(_onPlayerUpdate);
+  }
+
+  void _onPlayerUpdate() {
+    if (mounted) setState(() {});
+  }
+
+  void _disposeController() {
+    _controller?.removeListener(_onPlayerUpdate);
+    _controller?.dispose();
+    _controller = null;
+    _videoId = '';
   }
 
   @override
   void dispose() {
-    _controller.close();
+    _disposeController();
     super.dispose();
-  }
-
-  Future<void> _openInYouTubeApp() async {
-    final uri = Uri.parse('https://www.youtube.com/watch?v=$_videoId');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_videoId.isEmpty) {
+    if (_videoId.isEmpty || _controller == null) {
       return const Center(
-        child: Text(
-          'Invalid YouTube link for this room.',
-          textAlign: TextAlign.center,
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            'Invalid YouTube link for this room.',
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }
 
-    return YoutubePlayerScaffold(
-      controller: _controller,
-      aspectRatio: 16 / 9,
-      builder: (context, player) {
-        return YoutubeValueBuilder(
-          controller: _controller,
-          builder: (context, value) {
-            return Stack(
-              fit: StackFit.expand,
-              alignment: Alignment.center,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: player,
-                ),
-                if (value.hasError)
-                  Material(
-                    color: Colors.black.withValues(alpha: 0.72),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.error_outline,
-                            color: Colors.white,
-                            size: 40,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _errorLabel(value.error),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                          const SizedBox(height: 12),
-                          FilledButton.icon(
-                            onPressed: _openInYouTubeApp,
-                            icon: const Icon(Icons.open_in_new),
-                            label: const Text('Open in YouTube'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
+    final c = _controller!;
+    final hasErr = c.value.hasError;
 
-  String _errorLabel(YoutubeError err) {
-    switch (err) {
-      case YoutubeError.notEmbeddable:
-      case YoutubeError.sameAsNotEmbeddable:
-        return 'Embedding is disabled for this video. Open it in the YouTube app.';
-      case YoutubeError.videoNotFound:
-      case YoutubeError.cannotFindVideo:
-        return 'Video not found or is private.';
-      case YoutubeError.invalidParam:
-        return 'Invalid video link.';
-      default:
-        return 'Playback failed in the player. Try opening in YouTube.';
-    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Stack(
+        fit: StackFit.expand,
+        alignment: Alignment.center,
+        children: [
+          YoutubePlayer(
+            controller: c,
+            aspectRatio: 16 / 9,
+            showVideoProgressIndicator: true,
+            progressIndicatorColor: AppColors.secondary,
+            progressColors: ProgressBarColors(
+              playedColor: AppColors.secondary,
+              handleColor: AppColors.primaryAccent,
+            ),
+          ),
+          if (hasErr)
+            ColoredBox(
+              color: Colors.black.withValues(alpha: 0.75),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.videocam_off_outlined,
+                        color: Colors.white, size: 40),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'This video can’t play embedded here (often blocked by the uploader). '
+                      'Create the room with a different video link.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () => c.load(_videoId),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

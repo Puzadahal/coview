@@ -37,13 +37,17 @@ class AboutPage extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
-                Text(
-                  AppTexts.tr(lang, 'aboutPageHeading'),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 40,
-                    fontWeight: FontWeight.w800,
-                    height: 1.05,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    AppTexts.tr(lang, 'aboutPageHeading'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 40,
+                      fontWeight: FontWeight.w800,
+                      height: 1.05,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 14),

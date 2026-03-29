@@ -6,8 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:youtube_player_iframe/youtube_player_iframe.dart'
-    show YoutubePlayerController;
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../domain/bloc/room_bloc.dart';
@@ -49,15 +47,6 @@ class _RoomPageState extends State<RoomPage> {
     _messageController.clear();
   }
 
-  Future<void> _openYouTubeExternally(String url) async {
-    final id = YoutubePlayerController.convertUrlToId(url);
-    if (id == null || id.isEmpty) return;
-    final uri = Uri.parse('https://www.youtube.com/watch?v=$id');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -86,10 +75,17 @@ class _RoomPageState extends State<RoomPage> {
           builder: (context, state) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(state.roomName ?? 'Coview Room'),
+                Text(
+                  state.roomName ?? 'Coview Room',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 Text(
                   '#${widget.roomId}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color:
                         theme.colorScheme.onSurface.withValues(alpha: 0.7),
@@ -404,7 +400,8 @@ class _RoomPageState extends State<RoomPage> {
                                         onPressed: () async {
                                           final uri =
                                               Uri.tryParse(state.videoUrl!);
-                                          if (uri == null) {
+                                          if (uri == null || !uri.hasScheme) {
+                                            if (!mounted) return;
                                             ScaffoldMessenger.of(context)
                                                 .showSnackBar(
                                               const SnackBar(
@@ -415,24 +412,34 @@ class _RoomPageState extends State<RoomPage> {
                                             );
                                             return;
                                           }
-                                          final canOpen =
-                                              await canLaunchUrl(uri);
-                                          if (!canOpen) {
+                                          try {
+                                            final ok = await launchUrl(
+                                              uri,
+                                              mode: LaunchMode
+                                                  .externalApplication,
+                                            );
+                                            if (!mounted) return;
+                                            if (!ok) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'No app handled this link. Install a browser or try again.',
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          } catch (e) {
+                                            if (!mounted) return;
                                             ScaffoldMessenger.of(context)
                                                 .showSnackBar(
-                                              const SnackBar(
+                                              SnackBar(
                                                 content: Text(
-                                                  'Cannot open this video link on this device.',
+                                                  'Could not open link: $e',
                                                 ),
                                               ),
                                             );
-                                            return;
                                           }
-                                          await launchUrl(
-                                            uri,
-                                            mode: LaunchMode
-                                                .externalApplication,
-                                          );
                                         },
                                         icon: const Icon(Icons.open_in_new),
                                         label: const Text('Open Video'),
@@ -443,20 +450,6 @@ class _RoomPageState extends State<RoomPage> {
                         ),
             ),
           ),
-          if (state.videoUrl != null &&
-              state.videoUrl!.isNotEmpty &&
-              _isYouTubeUrl(state.videoUrl!))
-            Padding(
-              padding: const EdgeInsets.only(top: 8, left: 4, right: 4),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () => _openYouTubeExternally(state.videoUrl!),
-                  icon: const Icon(Icons.open_in_new, size: 18),
-                  label: const Text('Open in YouTube'),
-                ),
-              ),
-            ),
           const SizedBox(height: AppConstants.spacingMedium),
           // Playback + call controls row (scroll on narrow screens)
           Padding(
@@ -607,28 +600,37 @@ class _RoomPageState extends State<RoomPage> {
                   color: theme.colorScheme.primary,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  'Room Chat',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Text(
+                    'Room Chat',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.15),
-                    borderRadius:
-                        BorderRadius.circular(AppConstants.borderRadiusSmall),
-                  ),
-                  child: Text(
-                    'Realtime UI only',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w600,
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.borderRadiusSmall,
+                      ),
+                    ),
+                    child: Text(
+                      'Live',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -640,6 +642,7 @@ class _RoomPageState extends State<RoomPage> {
             child: BlocBuilder<RoomBloc, RoomState>(
               builder: (context, state) {
                 final messages = state.messages;
+                final maxBubbleW = MediaQuery.sizeOf(context).width * 0.85;
                 return ListView.builder(
                   padding: const EdgeInsets.all(AppConstants.spacingMedium),
                   itemCount: messages.length,
@@ -650,6 +653,7 @@ class _RoomPageState extends State<RoomPage> {
                       alignment:
                           isMe ? Alignment.centerRight : Alignment.centerLeft,
                       child: Container(
+                        constraints: BoxConstraints(maxWidth: maxBubbleW),
                         margin: const EdgeInsets.only(
                           bottom: AppConstants.spacingSmall,
                         ),
@@ -701,6 +705,7 @@ class _RoomPageState extends State<RoomPage> {
                             const SizedBox(height: 2),
                             Text(
                               message.text,
+                              softWrap: true,
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: isMe
                                     ? AppColors.textWhite
