@@ -30,9 +30,12 @@ class _RoomPageState extends State<RoomPage> {
   VideoPlayerController? _videoController;
   Future<void>? _initializeVideoFuture;
   String? _currentVideoUrl;
+  final GlobalKey<YoutubePlayerViewState> _youtubeKey =
+      GlobalKey<YoutubePlayerViewState>();
   RoomCallService? _callService;
   MediaStream? _localCallStream;
   final _localRenderer = RTCVideoRenderer();
+  int _lastPlaybackVersionApplied = -1;
 
   @override
   void dispose() {
@@ -46,6 +49,72 @@ class _RoomPageState extends State<RoomPage> {
     final text = _messageController.text;
     context.read<RoomBloc>().add(RoomMessageSent(text));
     _messageController.clear();
+  }
+
+  Future<double> _currentPositionSeconds(RoomState state) async {
+    if (_isYouTubeUrl(state.videoUrl ?? '')) {
+      final yt = _youtubeKey.currentState;
+      if (yt != null) return await yt.currentPositionSeconds();
+      return 0;
+    }
+    final pos = _videoController?.value.position ?? Duration.zero;
+    return pos.inMilliseconds / 1000.0;
+  }
+
+  Future<void> _setPlaying(RoomState state, bool playing) async {
+    if (_isYouTubeUrl(state.videoUrl ?? '')) {
+      final yt = _youtubeKey.currentState;
+      if (yt == null) return;
+      if (playing) {
+        await yt.play();
+      } else {
+        await yt.pause();
+      }
+      return;
+    }
+
+    final vc = _videoController;
+    if (vc == null) return;
+    if (playing) {
+      await vc.play();
+    } else {
+      await vc.pause();
+    }
+  }
+
+  Future<void> _applyRemotePlayback(RoomState state) async {
+    if (state.playbackVersion == _lastPlaybackVersionApplied) return;
+    _lastPlaybackVersionApplied = state.playbackVersion;
+
+    if (state.playbackPositionSeconds >= 0) {
+      if (_isYouTubeUrl(state.videoUrl ?? '')) {
+        await _youtubeKey.currentState?.seekToSeconds(
+          state.playbackPositionSeconds,
+        );
+      } else if (_videoController != null) {
+        await _videoController!.seekTo(
+          Duration(milliseconds: (state.playbackPositionSeconds * 1000).round()),
+        );
+      }
+    }
+    await _setPlaying(state, state.isPlaying);
+  }
+
+  Future<void> _togglePlayback(RoomState state) async {
+    final currentlyPlaying = _isYouTubeUrl(state.videoUrl ?? '')
+        ? (await _youtubeKey.currentState?.isPlaying() ?? false)
+        : (_videoController?.value.isPlaying ?? false);
+    final target = !currentlyPlaying;
+
+    await _setPlaying(state, target);
+    final positionSeconds = await _currentPositionSeconds(state);
+    if (!mounted) return;
+    context.read<RoomBloc>().add(
+      RoomPlaybackSetRequested(
+        isPlaying: target,
+        positionSeconds: positionSeconds,
+      ),
+    );
   }
 
   @override
@@ -135,6 +204,7 @@ class _RoomPageState extends State<RoomPage> {
             child: BlocBuilder<RoomBloc, RoomState>(
               builder: (context, state) {
                 _setupVideoController(state.videoUrl);
+                _applyRemotePlayback(state);
 
                 if (state.status == RoomStatus.loading) {
                   return const Center(child: CircularProgressIndicator());
@@ -353,8 +423,11 @@ class _RoomPageState extends State<RoomPage> {
                             ),
                           ),
                         )
-                      : _isYouTubeUrl(state.videoUrl!)
-                      ? YoutubePlayerView(videoUrl: state.videoUrl!)
+                  : _isYouTubeUrl(state.videoUrl!)
+                      ? YoutubePlayerView(
+                          key: _youtubeKey,
+                          videoUrl: state.videoUrl!,
+                        )
                       : Container(
                           width: double.infinity,
                           decoration: const BoxDecoration(
@@ -528,9 +601,9 @@ class _RoomPageState extends State<RoomPage> {
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      onPressed: () {},
-                      icon: const Icon(
-                        Icons.play_arrow,
+                      onPressed: () => _togglePlayback(state),
+                      icon: Icon(
+                        state.isPlaying ? Icons.pause : Icons.play_arrow,
                         color: AppColors.textWhite,
                       ),
                     ),

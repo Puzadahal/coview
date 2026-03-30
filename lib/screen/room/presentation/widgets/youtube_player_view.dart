@@ -15,10 +15,10 @@ class YoutubePlayerView extends StatefulWidget {
   const YoutubePlayerView({super.key, required this.videoUrl});
 
   @override
-  State<YoutubePlayerView> createState() => _YoutubePlayerViewState();
+  State<YoutubePlayerView> createState() => YoutubePlayerViewState();
 }
 
-class _YoutubePlayerViewState extends State<YoutubePlayerView> {
+class YoutubePlayerViewState extends State<YoutubePlayerView> {
   ypf.YoutubePlayerController? _mobileController;
   ypi.YoutubePlayerController? _webController;
   String _videoId = '';
@@ -81,6 +81,53 @@ class _YoutubePlayerViewState extends State<YoutubePlayerView> {
     _webController?.close();
     _webController = null;
     _videoId = '';
+  }
+
+  bool get hasController =>
+      _videoId.isNotEmpty &&
+      ((kIsWeb && _webController != null) || (!kIsWeb && _mobileController != null));
+
+  Future<void> play() async {
+    if (kIsWeb) {
+      await _webController?.playVideo();
+    } else {
+      _mobileController?.play();
+    }
+  }
+
+  Future<void> pause() async {
+    if (kIsWeb) {
+      await _webController?.pauseVideo();
+    } else {
+      _mobileController?.pause();
+    }
+  }
+
+  Future<void> seekToSeconds(double seconds) async {
+    if (seconds.isNaN) return;
+    final safe = seconds < 0 ? 0.0 : seconds;
+    if (kIsWeb) {
+      await _webController?.seekTo(seconds: safe, allowSeekAhead: true);
+    } else {
+      _mobileController?.seekTo(Duration(milliseconds: (safe * 1000).round()));
+    }
+  }
+
+  Future<bool> isPlaying() async {
+    if (kIsWeb) {
+      return (_webController?.value.playerState == ypi.PlayerState.playing);
+    }
+    return _mobileController?.value.isPlaying ?? false;
+  }
+
+  Future<double> currentPositionSeconds() async {
+    if (kIsWeb) {
+      final c = _webController;
+      if (c == null) return 0;
+      return await c.currentTime;
+    }
+    final pos = _mobileController?.value.position ?? Duration.zero;
+    return pos.inMilliseconds / 1000.0;
   }
 
   @override
