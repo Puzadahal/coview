@@ -10,11 +10,7 @@ class VideoBackground extends StatefulWidget {
   final String? videoPath;
   final Widget child;
 
-  const VideoBackground({
-    super.key,
-    this.videoPath,
-    required this.child,
-  });
+  const VideoBackground({super.key, this.videoPath, required this.child});
 
   @override
   State<VideoBackground> createState() => _VideoBackgroundState();
@@ -77,7 +73,9 @@ class _VideoBackgroundState extends State<VideoBackground> {
       fit: StackFit.expand,
       children: [
         // Video background or gradient fallback
-        if (_controller != null && _isInitialized && _controller!.value.isInitialized)
+        if (_controller != null &&
+            _isInitialized &&
+            _controller!.value.isInitialized)
           Positioned.fill(
             child: FittedBox(
               fit: BoxFit.cover,
@@ -106,9 +104,7 @@ class _VideoBackgroundState extends State<VideoBackground> {
             ),
           ),
         // Dark overlay for text readability (0.4 opacity)
-        Container(
-          color: Colors.black.withValues(alpha: 0.4),
-        ),
+        Container(color: Colors.black.withValues(alpha: 0.4)),
         // Content
         widget.child,
       ],

@@ -87,7 +87,9 @@ class _CreateRoomPageContent extends StatelessWidget {
                         style: theme.textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                           fontSize: 24,
-                          color: isDark ? AppColors.textWhite : AppColors.textDark,
+                          color: isDark
+                              ? AppColors.textWhite
+                              : AppColors.textDark,
                           letterSpacing: 0.5,
                         ),
                         textAlign: TextAlign.center,
@@ -127,7 +129,9 @@ class _CreateRoomPageContent extends StatelessWidget {
                       if (state.isUrlValid && state.videoThumbnail != null) {
                         return Column(
                           children: [
-                            RoomPreviewCard(thumbnailUrl: state.videoThumbnail!),
+                            RoomPreviewCard(
+                              thumbnailUrl: state.videoThumbnail!,
+                            ),
                             const SizedBox(height: 24),
                           ],
                         );
@@ -191,15 +195,9 @@ class _RoomNameField extends StatelessWidget {
                       ? AppColors.textWhite.withValues(alpha: 0.5)
                       : AppColors.textGrey,
                 ),
-                prefixIcon: Icon(
-                  Icons.room,
-                  color: theme.colorScheme.primary,
-                ),
+                prefixIcon: Icon(Icons.room, color: theme.colorScheme.primary),
                 suffixIcon: state.roomName.trim().isNotEmpty
-                    ? Icon(
-                        Icons.check_circle,
-                        color: AppColors.success,
-                      )
+                    ? Icon(Icons.check_circle, color: AppColors.success)
                     : null,
                 filled: true,
                 fillColor: isDark
@@ -275,20 +273,11 @@ class _VideoUrlField extends StatelessWidget {
                       ? AppColors.textWhite.withValues(alpha: 0.5)
                       : AppColors.textGrey,
                 ),
-                prefixIcon: Icon(
-                  Icons.link,
-                  color: theme.colorScheme.primary,
-                ),
+                prefixIcon: Icon(Icons.link, color: theme.colorScheme.primary),
                 suffixIcon: state.videoUrl.trim().isNotEmpty
                     ? state.isUrlValid
-                        ? Icon(
-                            Icons.check_circle,
-                            color: AppColors.success,
-                          )
-                        : Icon(
-                            Icons.error,
-                            color: AppColors.error,
-                          )
+                          ? Icon(Icons.check_circle, color: AppColors.success)
+                          : Icon(Icons.error, color: AppColors.error)
                     : null,
                 filled: true,
                 fillColor: isDark
@@ -324,10 +313,7 @@ class _VideoUrlField extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
                   'Please enter a valid video URL',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.error,
-                  ),
+                  style: TextStyle(fontSize: 12, color: AppColors.error),
                 ),
               ),
             const SizedBox(height: 8),
@@ -338,15 +324,10 @@ class _VideoUrlField extends StatelessWidget {
                 onPressed: () {
                   // TODO: Implement file upload
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('File upload coming soon!'),
-                    ),
+                    const SnackBar(content: Text('File upload coming soon!')),
                   );
                 },
-                icon: Icon(
-                  Icons.upload_file,
-                  color: theme.colorScheme.primary,
-                ),
+                icon: Icon(Icons.upload_file, color: theme.colorScheme.primary),
                 label: Text(
                   'Upload Video',
                   style: TextStyle(
@@ -389,7 +370,9 @@ class _PrivacyToggle extends StatelessWidget {
             color: isDark
                 ? AppColors.primaryDarkVariant.withValues(alpha: 0.4)
                 : AppColors.backgroundGrey,
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+            borderRadius: BorderRadius.circular(
+              AppConstants.borderRadiusMedium,
+            ),
             border: Border.all(
               color: theme.colorScheme.primary.withValues(alpha: 0.3),
               width: 1.5,
@@ -447,7 +430,9 @@ class _PrivacyToggle extends StatelessWidget {
                 value: state.isPrivate,
                 onChanged: (value) {
                   HapticFeedback.lightImpact();
-                  context.read<CreateRoomBloc>().add(PrivacySettingChanged(value));
+                  context.read<CreateRoomBloc>().add(
+                    PrivacySettingChanged(value),
+                  );
                 },
               ),
             ],
@@ -458,7 +443,6 @@ class _PrivacyToggle extends StatelessWidget {
   }
 }
 
-
 /// Advanced Settings Section
 class _AdvancedSettingsSection extends StatelessWidget {
   @override
@@ -468,7 +452,8 @@ class _AdvancedSettingsSection extends StatelessWidget {
 
     return BlocBuilder<CreateRoomBloc, CreateRoomState>(
       buildWhen: (previous, current) =>
-          previous.isAdvancedSettingsExpanded != current.isAdvancedSettingsExpanded,
+          previous.isAdvancedSettingsExpanded !=
+          current.isAdvancedSettingsExpanded,
       builder: (context, state) {
         return Column(
           children: [
@@ -476,17 +461,24 @@ class _AdvancedSettingsSection extends StatelessWidget {
               onTap: () {
                 HapticFeedback.lightImpact();
                 context.read<CreateRoomBloc>().add(
-                      AdvancedSettingsToggled(!state.isAdvancedSettingsExpanded),
-                    );
+                  AdvancedSettingsToggled(!state.isAdvancedSettingsExpanded),
+                );
               },
-              borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+              borderRadius: BorderRadius.circular(
+                AppConstants.borderRadiusMedium,
+              ),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   color: isDark
                       ? AppColors.primaryDarkVariant.withValues(alpha: 0.4)
                       : AppColors.backgroundGrey,
-                  borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+                  borderRadius: BorderRadius.circular(
+                    AppConstants.borderRadiusMedium,
+                  ),
                   border: Border.all(
                     color: theme.colorScheme.primary.withValues(alpha: 0.3),
                     width: 1.5,
@@ -512,7 +504,9 @@ class _AdvancedSettingsSection extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? AppColors.textWhite : AppColors.textDark,
+                        color: isDark
+                            ? AppColors.textWhite
+                            : AppColors.textDark,
                       ),
                     ),
                     const Spacer(),
@@ -568,7 +562,10 @@ class _ParticipantLimitField extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.primary.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(4),
@@ -599,17 +596,20 @@ class _ParticipantLimitField extends StatelessWidget {
             Row(
               children: [
                 IconButton(
-                  onPressed: state.participantLimit > AppConstants.minParticipantLimit
+                  onPressed:
+                      state.participantLimit > AppConstants.minParticipantLimit
                       ? () {
                           HapticFeedback.lightImpact();
                           context.read<CreateRoomBloc>().add(
-                                ParticipantLimitChanged(state.participantLimit - 1),
-                              );
+                            ParticipantLimitChanged(state.participantLimit - 1),
+                          );
                         }
                       : null,
                   icon: Icon(
                     Icons.remove_circle_outline,
-                    color: state.participantLimit > AppConstants.minParticipantLimit
+                    color:
+                        state.participantLimit >
+                            AppConstants.minParticipantLimit
                         ? theme.colorScheme.primary
                         : AppColors.disabledGrey,
                   ),
@@ -623,10 +623,13 @@ class _ParticipantLimitField extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: isDark ? AppColors.textWhite : AppColors.textDark,
+                          color: isDark
+                              ? AppColors.textWhite
+                              : AppColors.textDark,
                         ),
                       ),
-                      if (state.participantLimit >= AppConstants.maxParticipantLimit)
+                      if (state.participantLimit >=
+                          AppConstants.maxParticipantLimit)
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Row(
@@ -653,12 +656,13 @@ class _ParticipantLimitField extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  onPressed: state.participantLimit < AppConstants.maxParticipantLimit
+                  onPressed:
+                      state.participantLimit < AppConstants.maxParticipantLimit
                       ? () {
                           HapticFeedback.lightImpact();
                           context.read<CreateRoomBloc>().add(
-                                ParticipantLimitChanged(state.participantLimit + 1),
-                              );
+                            ParticipantLimitChanged(state.participantLimit + 1),
+                          );
                         }
                       : () {
                           // Show message when trying to exceed limit
@@ -666,7 +670,10 @@ class _ParticipantLimitField extends StatelessWidget {
                             SnackBar(
                               content: Row(
                                 children: [
-                                  const Icon(Icons.info_outline, color: AppColors.textWhite),
+                                  const Icon(
+                                    Icons.info_outline,
+                                    color: AppColors.textWhite,
+                                  ),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
@@ -682,7 +689,9 @@ class _ParticipantLimitField extends StatelessWidget {
                         },
                   icon: Icon(
                     Icons.add_circle_outline,
-                    color: state.participantLimit < AppConstants.maxParticipantLimit
+                    color:
+                        state.participantLimit <
+                            AppConstants.maxParticipantLimit
                         ? theme.colorScheme.primary
                         : AppColors.disabledGrey,
                   ),
@@ -725,7 +734,9 @@ class _CommunicationOptions extends StatelessWidget {
               value: state.textChatEnabled,
               onChanged: (value) {
                 HapticFeedback.lightImpact();
-                context.read<CreateRoomBloc>().add(TextChatEnabledChanged(value));
+                context.read<CreateRoomBloc>().add(
+                  TextChatEnabledChanged(value),
+                );
               },
             ),
             const SizedBox(height: 12),
@@ -735,7 +746,9 @@ class _CommunicationOptions extends StatelessWidget {
               value: state.voiceChatEnabled,
               onChanged: (value) {
                 HapticFeedback.lightImpact();
-                context.read<CreateRoomBloc>().add(VoiceChatEnabledChanged(value));
+                context.read<CreateRoomBloc>().add(
+                  VoiceChatEnabledChanged(value),
+                );
               },
             ),
             const SizedBox(height: 12),
@@ -745,7 +758,9 @@ class _CommunicationOptions extends StatelessWidget {
               value: state.videoBubblesEnabled,
               onChanged: (value) {
                 HapticFeedback.lightImpact();
-                context.read<CreateRoomBloc>().add(VideoBubblesEnabledChanged(value));
+                context.read<CreateRoomBloc>().add(
+                  VideoBubblesEnabledChanged(value),
+                );
               },
             ),
           ],
@@ -788,11 +803,7 @@ class _CommunicationToggle extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 20,
-            color: theme.colorScheme.primary,
-          ),
+          Icon(icon, size: 20, color: theme.colorScheme.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -804,10 +815,7 @@ class _CommunicationToggle extends StatelessWidget {
               ),
             ),
           ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-          ),
+          Switch(value: value, onChanged: onChanged),
         ],
       ),
     );
@@ -842,7 +850,9 @@ class _LaunchPartyButton extends StatelessWidget {
                           ],
                         )
                       : null,
-                  borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+                  borderRadius: BorderRadius.circular(
+                    AppConstants.borderRadiusLarge,
+                  ),
                   boxShadow: state.isFormValid
                       ? [
                           BoxShadow(
@@ -855,10 +865,14 @@ class _LaunchPartyButton extends StatelessWidget {
                       : null,
                 ),
                 child: ElevatedButton(
-                  onPressed: state.isFormValid && state.status != CreateRoomStatus.loading
+                  onPressed:
+                      state.isFormValid &&
+                          state.status != CreateRoomStatus.loading
                       ? () {
                           HapticFeedback.mediumImpact();
-                          context.read<CreateRoomBloc>().add(const CreateRoomButtonPressed());
+                          context.read<CreateRoomBloc>().add(
+                            const CreateRoomButtonPressed(),
+                          );
                         }
                       : null,
                   style: ElevatedButton.styleFrom(
@@ -871,7 +885,9 @@ class _LaunchPartyButton extends StatelessWidget {
                     disabledBackgroundColor: AppColors.disabledGrey,
                     disabledForegroundColor: AppColors.textGrey,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.borderRadiusLarge,
+                      ),
                     ),
                     elevation: 0,
                     shadowColor: Colors.transparent,
@@ -882,7 +898,9 @@ class _LaunchPartyButton extends StatelessWidget {
                           width: 24,
                           child: CircularProgressIndicator(
                             strokeWidth: 2.5,
-                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.textWhite),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.textWhite,
+                            ),
                           ),
                         )
                       : Row(

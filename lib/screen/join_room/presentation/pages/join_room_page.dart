@@ -37,7 +37,9 @@ class _JoinRoomPageState extends State<JoinRoomPage> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.primaryDark : AppColors.lightBackground,
+      backgroundColor: isDark
+          ? AppColors.primaryDark
+          : AppColors.lightBackground,
       appBar: AppBar(
         title: const Text('Join Existing Room'),
         backgroundColor: Colors.transparent,
@@ -65,8 +67,10 @@ class _JoinRoomPageState extends State<JoinRoomPage> {
             if (user != null) {
               try {
                 final firestore = FirebaseFirestore.instance;
-                final roomDoc =
-                    await firestore.collection('rooms').doc(roomId).get();
+                final roomDoc = await firestore
+                    .collection('rooms')
+                    .doc(roomId)
+                    .get();
                 final data = roomDoc.data() ?? {};
                 await firestore
                     .collection('users')
@@ -74,14 +78,16 @@ class _JoinRoomPageState extends State<JoinRoomPage> {
                     .collection('rooms')
                     .doc(roomId)
                     .set({
-                  'roomId': roomId,
-                  'name': (data['name'] as String?) ?? 'Watch Room',
-                  'videoUrl': (data['videoUrl'] as String?) ?? '',
-                  'isHost': data['hostId'] == user.uid,
-                  'lastJoinedAt': FieldValue.serverTimestamp(),
-                }, SetOptions(merge: true));
+                      'roomId': roomId,
+                      'name': (data['name'] as String?) ?? 'Watch Room',
+                      'videoUrl': (data['videoUrl'] as String?) ?? '',
+                      'isHost': data['hostId'] == user.uid,
+                      'lastJoinedAt': FieldValue.serverTimestamp(),
+                    }, SetOptions(merge: true));
               } catch (e, st) {
-                debugPrint('JoinRoom: could not save user room history: $e\n$st');
+                debugPrint(
+                  'JoinRoom: could not save user room history: $e\n$st',
+                );
               }
             }
 
@@ -102,7 +108,9 @@ class _JoinRoomPageState extends State<JoinRoomPage> {
                         'Enter Invite Link or Room Code',
                         style: theme.textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: isDark ? AppColors.textWhite : AppColors.textDark,
+                          color: isDark
+                              ? AppColors.textWhite
+                              : AppColors.textDark,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -128,9 +136,9 @@ class _JoinRoomPageState extends State<JoinRoomPage> {
                           errorText: state.error,
                         ),
                         onChanged: (value) {
-                          context
-                              .read<JoinRoomBloc>()
-                              .add(JoinRoomInputChanged(value));
+                          context.read<JoinRoomBloc>().add(
+                            JoinRoomInputChanged(value),
+                          );
                         },
                         onSubmitted: (_) => _submit(),
                       ),
@@ -138,8 +146,7 @@ class _JoinRoomPageState extends State<JoinRoomPage> {
                       SizedBox(
                         height: AppConstants.buttonHeightLarge,
                         child: ElevatedButton.icon(
-                          onPressed:
-                              state.canSubmit ? _submit : null,
+                          onPressed: state.canSubmit ? _submit : null,
                           icon: const Icon(Icons.meeting_room_outlined),
                           label: const Text(
                             'Join Room',
@@ -158,4 +165,3 @@ class _JoinRoomPageState extends State<JoinRoomPage> {
     );
   }
 }
-
