@@ -201,7 +201,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       emit(
         state.copyWith(
           status: LoginStatus.failure,
-          errorMessage: 'Google sign-in failed',
+          errorMessage: e.toString().replaceFirst('Exception: ', ''),
         ),
       );
     }

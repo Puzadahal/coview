@@ -24,6 +24,9 @@ class RoomState extends Equatable {
   final String? error;
   final String? roomName;
   final String? videoUrl;
+  final bool isPlaying;
+  final double playbackPositionSeconds;
+  final int playbackVersion;
 
   const RoomState({
     required this.roomId,
@@ -32,6 +35,9 @@ class RoomState extends Equatable {
     this.error,
     this.roomName,
     this.videoUrl,
+    this.isPlaying = false,
+    this.playbackPositionSeconds = 0,
+    this.playbackVersion = 0,
   });
 
   factory RoomState.initial(String roomId) {
@@ -48,6 +54,9 @@ class RoomState extends Equatable {
     String? error,
     String? roomName,
     String? videoUrl,
+    bool? isPlaying,
+    double? playbackPositionSeconds,
+    int? playbackVersion,
   }) {
     return RoomState(
       roomId: roomId ?? this.roomId,
@@ -56,10 +65,24 @@ class RoomState extends Equatable {
       error: error,
       roomName: roomName ?? this.roomName,
       videoUrl: videoUrl ?? this.videoUrl,
+      isPlaying: isPlaying ?? this.isPlaying,
+      playbackPositionSeconds:
+          playbackPositionSeconds ?? this.playbackPositionSeconds,
+      playbackVersion: playbackVersion ?? this.playbackVersion,
     );
   }
 
   @override
-  List<Object?> get props => [roomId, messages, status, error, roomName, videoUrl];
+  List<Object?> get props => [
+        roomId,
+        messages,
+        status,
+        error,
+        roomName,
+        videoUrl,
+        isPlaying,
+        playbackPositionSeconds,
+        playbackVersion,
+      ];
 }
 

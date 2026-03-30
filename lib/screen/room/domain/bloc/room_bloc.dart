@@ -14,11 +14,14 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
     on<RoomInitialized>(_onInitialized);
     on<RoomMessageSent>(_onMessageSent);
     on<RoomMessagesUpdated>(_onMessagesUpdated);
+    on<RoomPlaybackSetRequested>(_onPlaybackSetRequested);
+    on<RoomPlaybackUpdated>(_onPlaybackUpdated);
   }
 
   late final FirebaseFirestore _firestore;
   late final fb.FirebaseAuth _auth;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _messagesSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _playbackSub;
 
   Future<void> _onInitialized(
     RoomInitialized event,
@@ -67,6 +70,25 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
           );
         }).toList();
         add(RoomMessagesUpdated(messages));
+      });
+
+      _playbackSub?.cancel();
+      _playbackSub = _firestore
+          .collection('rooms')
+          .doc(state.roomId)
+          .collection('playback')
+          .doc('state')
+          .snapshots()
+          .listen((snap) {
+        final data = snap.data();
+        if (data == null) return;
+        add(
+          RoomPlaybackUpdated(
+            isPlaying: (data['isPlaying'] as bool?) ?? false,
+            positionSeconds: (data['positionSeconds'] as num?)?.toDouble() ?? 0,
+            version: (data['version'] as num?)?.toInt() ?? 0,
+          ),
+        );
       });
 
       emit(
@@ -118,9 +140,42 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
     emit(state.copyWith(messages: event.messages));
   }
 
+  Future<void> _onPlaybackSetRequested(
+    RoomPlaybackSetRequested event,
+    Emitter<RoomState> emit,
+  ) async {
+    final nextVersion = state.playbackVersion + 1;
+    await _firestore
+        .collection('rooms')
+        .doc(state.roomId)
+        .collection('playback')
+        .doc('state')
+        .set({
+      'isPlaying': event.isPlaying,
+      'positionSeconds': event.positionSeconds,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'actorId': _auth.currentUser?.uid,
+      'version': nextVersion,
+    }, SetOptions(merge: true));
+  }
+
+  void _onPlaybackUpdated(
+    RoomPlaybackUpdated event,
+    Emitter<RoomState> emit,
+  ) {
+    emit(
+      state.copyWith(
+        isPlaying: event.isPlaying,
+        playbackPositionSeconds: event.positionSeconds,
+        playbackVersion: event.version,
+      ),
+    );
+  }
+
   @override
   Future<void> close() {
     _messagesSub?.cancel();
+    _playbackSub?.cancel();
     return super.close();
   }
 }

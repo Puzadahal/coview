@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -245,6 +246,10 @@ class _RoomPageState extends State<RoomPage> {
     bool isDark,
     RoomState state,
   ) {
+    final videoUrl = state.videoUrl?.trim() ?? '';
+    final isLikelyLocalSource =
+        videoUrl.isNotEmpty && _isLikelyLocalPath(videoUrl);
+
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppColors.primaryDarkVariant : AppColors.lightSurface,
@@ -301,7 +306,54 @@ class _RoomPageState extends State<RoomPage> {
                         ),
                       ),
                     )
-                  : _isYouTubeUrl(state.videoUrl!)
+                  : isLikelyLocalSource
+                      ? Container(
+                          width: double.infinity,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Color(0xFF6C5CE7),
+                                Color(0xFF00D9FF),
+                              ],
+                            ),
+                          ),
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.link_off,
+                                    size: 56,
+                                    color: AppColors.textWhite,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    kIsWeb
+                                        ? 'This room uses a local file path. Web cannot access files from another device.'
+                                        : 'This room uses a host local file path. Your device cannot access it.',
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: AppColors.textWhite,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    'Ask the host to recreate the room with a public HTTP(S) video URL.',
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: AppColors.textWhite
+                                          .withValues(alpha: 0.9),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                      : _isYouTubeUrl(state.videoUrl!)
                       ? YoutubePlayerView(videoUrl: state.videoUrl!)
                       : Container(
                           width: double.infinity,
@@ -770,5 +822,16 @@ class _RoomPageState extends State<RoomPage> {
     if (uri == null) return false;
     final host = uri.host.toLowerCase();
     return host.contains('youtube.com') || host.contains('youtu.be');
+  }
+
+  bool _isLikelyLocalPath(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return true;
+    if (uri.scheme == 'file') return true;
+    // e.g. C:\video.mp4
+    if (RegExp(r'^[a-zA-Z]:\\').hasMatch(url)) return true;
+    // no scheme -> relative/local
+    if (!uri.hasScheme) return true;
+    return false;
   }
 }

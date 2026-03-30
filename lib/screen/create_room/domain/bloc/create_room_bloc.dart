@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../../../../core/constants/app_constants.dart';
 import 'create_room_event.dart';
@@ -40,20 +39,21 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     VideoUrlChanged event,
     Emitter<CreateRoomState> emit,
   ) async {
+    final normalized = _normalizeVideoUrl(event.url);
     emit(state.copyWith(
-      videoUrl: event.url,
+      videoUrl: normalized,
       isUrlValid: false,
       videoThumbnail: null,
       status: CreateRoomStatus.validating,
     ));
 
     // Validate URL and get thumbnail
-    if (event.url.trim().isNotEmpty) {
-      final isValid = _validateUrl(event.url);
+    if (normalized.trim().isNotEmpty) {
+      final isValid = _validateUrl(normalized);
       String? thumbnail;
 
       if (isValid) {
-        thumbnail = _getThumbnailUrl(event.url);
+        thumbnail = _getThumbnailUrl(normalized);
       }
 
       emit(state.copyWith(
@@ -163,7 +163,7 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
       final roomData = <String, dynamic>{
         'roomId': roomId,
         'name': state.roomName.trim(),
-        'videoUrl': state.videoUrl.trim(),
+        'videoUrl': _normalizeVideoUrl(state.videoUrl),
         'isPrivate': state.isPrivate,
         'hostControlsOnly': state.hostControlsOnly,
         'participantLimit': state.participantLimit,
@@ -192,7 +192,7 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
           await userRoomsRef.set({
             'roomId': roomId,
             'name': state.roomName.trim(),
-            'videoUrl': state.videoUrl.trim(),
+            'videoUrl': _normalizeVideoUrl(state.videoUrl),
             'isHost': true,
             'lastJoinedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
@@ -245,34 +245,16 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     emit(const CreateRoomState());
   }
 
-  /// Validate video URL (supports YouTube, Twitch, Dailymotion, and other common formats)
+  /// Validate a shareable URL for cross-device rooms.
+  ///
+  /// Note: Local paths and file:// URLs are intentionally rejected because
+  /// friends joining from web/mobile cannot access host local files.
   bool _validateUrl(String url) {
     if (url.trim().isEmpty) return false;
 
-    // Basic URL validation
     final uri = Uri.tryParse(url);
-
-    // 1) Direct file paths (local) – accept common video extensions
-    final lower = url.toLowerCase().trim();
-    const exts = [
-      '.mp4',
-      '.mkv',
-      '.mov',
-      '.avi',
-      '.wmv',
-      '.flv',
-      '.webm',
-      '.m3u8',
-    ];
-    final hasVideoExt = exts.any(lower.endsWith);
-
-    // Local-style path (no scheme) but looks like a video file
-    if ((uri == null || !uri.hasScheme) && hasVideoExt) {
-      // e.g. C:\videos\movie.mp4 or /home/user/movie.mp4
-      return true;
-    }
-
     if (uri == null || !uri.hasScheme) return false;
+    if (!(uri.scheme == 'http' || uri.scheme == 'https')) return false;
 
     // Check for YouTube
     if (uri.host.contains('youtube.com') || uri.host.contains('youtu.be')) {
@@ -294,11 +276,35 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
       }
     }
 
-    // Allow local file paths or other valid URLs
-    return uri.hasScheme &&
-        (uri.scheme == 'http' ||
-            uri.scheme == 'https' ||
-            uri.scheme == 'file');
+    // Allow direct HTTP(S) video files/streams.
+    final lowerPath = uri.path.toLowerCase();
+    return lowerPath.endsWith('.mp4') ||
+        lowerPath.endsWith('.m3u8') ||
+        lowerPath.endsWith('.webm') ||
+        lowerPath.endsWith('.mov');
+  }
+
+  String _normalizeVideoUrl(String input) {
+    final raw = input.trim();
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return raw;
+
+    final host = uri.host.toLowerCase();
+    if (host.contains('youtu.be') && uri.pathSegments.isNotEmpty) {
+      final id = uri.pathSegments.first;
+      if (id.isNotEmpty) return 'https://www.youtube.com/watch?v=$id';
+    }
+    if (host.contains('youtube.com')) {
+      final id = uri.queryParameters['v'];
+      if (id != null && id.isNotEmpty) {
+        return 'https://www.youtube.com/watch?v=$id';
+      }
+      final segments = uri.pathSegments;
+      if (segments.length >= 2 && segments.first == 'shorts') {
+        return 'https://www.youtube.com/watch?v=${segments[1]}';
+      }
+    }
+    return raw;
   }
 
   /// Get thumbnail URL from video URL

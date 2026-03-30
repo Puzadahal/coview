@@ -33,3 +33,33 @@ class RoomMessagesUpdated extends RoomEvent {
   List<Object?> get props => [messages];
 }
 
+/// User requests play/pause for room-wide sync.
+class RoomPlaybackSetRequested extends RoomEvent {
+  final bool isPlaying;
+  final double positionSeconds;
+
+  const RoomPlaybackSetRequested({
+    required this.isPlaying,
+    required this.positionSeconds,
+  });
+
+  @override
+  List<Object?> get props => [isPlaying, positionSeconds];
+}
+
+/// Incoming playback state from backend.
+class RoomPlaybackUpdated extends RoomEvent {
+  final bool isPlaying;
+  final double positionSeconds;
+  final int version;
+
+  const RoomPlaybackUpdated({
+    required this.isPlaying,
+    required this.positionSeconds,
+    required this.version,
+  });
+
+  @override
+  List<Object?> get props => [isPlaying, positionSeconds, version];
+}
+

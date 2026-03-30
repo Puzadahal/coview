@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../../../core/models/user_model.dart';
 
@@ -108,59 +109,65 @@ class AuthMethods {
   /// Google sign‑in using Firebase Auth and Firestore.
   Future<User?> signInWithGoogle() async {
     try {
-      /// STEP 1 — Pick Google account
-      final GoogleSignInAccount? googleUser =
-          await GoogleSignIn().signIn();
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
 
       if (googleUser == null) {
         return null;
       }
 
-      /// STEP 2 — Get authentication tokens
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
-      /// STEP 3 — Create firebase credential
       final credential = fb.GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      /// STEP 4 — Firebase login
       final fb.UserCredential userCredential =
           await _auth.signInWithCredential(credential);
 
       final fb.User? firebaseUser = userCredential.user;
       if (firebaseUser == null) return null;
 
-      /// STEP 5 — Firestore user check
-      final userDoc =
-          _firestore.collection('users').doc(firebaseUser.uid);
-
+      final userDoc = _firestore.collection('users').doc(firebaseUser.uid);
       final snapshot = await userDoc.get();
 
-      /// STEP 6 — First time user (VERY IMPORTANT)
       if (!snapshot.exists) {
         await userDoc.set({
           'uid': firebaseUser.uid,
           'email': firebaseUser.email,
-          'name': firebaseUser.displayName ?? "User",
+          'name': firebaseUser.displayName ?? 'User',
           'photo': firebaseUser.photoURL,
           'createdAt': FieldValue.serverTimestamp(),
           'isGuest': false,
         });
       }
 
-      /// STEP 7 — return app user model
       return User.registered(
         id: firebaseUser.uid,
-        email: firebaseUser.email ?? "",
-        name: firebaseUser.displayName ?? "User",
-        // photoUrl: firebaseUser.photoURL,
+        email: firebaseUser.email ?? '',
+        name: firebaseUser.displayName ?? 'User',
       );
+    } on fb.FirebaseAuthException catch (e) {
+      if (e.code == 'account-exists-with-different-credential') {
+        throw Exception(
+          'This email already exists with another sign-in method. Use that method first.',
+        );
+      }
+      throw Exception(e.message ?? 'Google sign-in failed (${e.code}).');
     } catch (e) {
-      print("GOOGLE SIGN IN ERROR: $e");
-      return null;
+      final message = e.toString();
+      debugPrint('GOOGLE SIGN IN ERROR: $message');
+
+      if (message.contains('ApiException: 10') ||
+          message.contains('DEVELOPER_ERROR') ||
+          message.contains('Unknown calling package name')) {
+        throw Exception(
+          'Google sign-in is misconfigured (DEVELOPER_ERROR). Add Android OAuth SHA fingerprints in Firebase, download a new google-services.json, then rebuild.',
+        );
+      }
+
+      throw Exception('Google sign-in failed. $message');
     }
   }
 }

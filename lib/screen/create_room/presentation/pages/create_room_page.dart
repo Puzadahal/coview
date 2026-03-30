@@ -189,7 +189,7 @@ class _RoomNameField extends StatelessWidget {
                 context.read<CreateRoomBloc>().add(RoomNameChanged(value));
               },
               decoration: InputDecoration(
-                hintText: 'e.g., The Movie Buffs',
+                hintText: '',
                 hintStyle: TextStyle(
                   color: isDark
                       ? AppColors.textWhite.withValues(alpha: 0.5)
@@ -251,7 +251,7 @@ class _VideoUrlField extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Video URL or Local Video Path',
+              'Video URL (Shareable Link)',
               style: TextStyle(
                 fontSize: AppConstants.fontSizeMedium,
                 fontWeight: FontWeight.w600,
@@ -267,7 +267,7 @@ class _VideoUrlField extends StatelessWidget {
               },
               decoration: InputDecoration(
                 hintText:
-                    'Paste YouTube / Twitch / Dailymotion link, direct video URL, or local path',
+                    'Paste YouTube / Vimeo / Dailymotion / Twitch / direct HTTP video URL',
                 hintStyle: TextStyle(
                   color: isDark
                       ? AppColors.textWhite.withValues(alpha: 0.5)
@@ -312,7 +312,7 @@ class _VideoUrlField extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'Please enter a valid video URL',
+                  'Please enter a valid public HTTP(S) video URL (local file paths are not shareable).',
                   style: TextStyle(fontSize: 12, color: AppColors.error),
                 ),
               ),
