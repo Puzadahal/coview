@@ -18,4 +18,3 @@ class AppLanguageCubit extends Cubit<String> {
     await prefs.setString(_languageKey, languageCode);
   }
 }
-

@@ -42,10 +42,7 @@ class _VideoBackgroundState extends State<VideoBackground> {
           _isInitialized = true;
         });
         // Notify BLoC that video loaded successfully
-        final bloc = context.read<HomeBloc>();
-        if (bloc != null) {
-          bloc.add(const VideoLoaded());
-        }
+        context.read<HomeBloc>().add(const VideoLoaded());
       }
     } catch (e) {
       if (mounted) {
@@ -53,10 +50,7 @@ class _VideoBackgroundState extends State<VideoBackground> {
           _isInitialized = true;
         });
         // Notify BLoC of video error
-        final bloc = context.read<HomeBloc>();
-        if (bloc != null) {
-          bloc.add(VideoError(e.toString()));
-        }
+        context.read<HomeBloc>().add(VideoError(e.toString()));
       }
     }
   }

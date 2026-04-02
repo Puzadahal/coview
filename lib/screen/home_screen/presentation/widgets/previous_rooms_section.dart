@@ -103,7 +103,7 @@ class _RoomsList extends StatelessWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: docs.length,
-          separatorBuilder: (_, __) => const Divider(height: 16),
+          separatorBuilder: (_, _) => const Divider(height: 16),
           itemBuilder: (context, index) {
             final data = docs[index].data();
             final roomId = data['roomId'] as String? ?? '';

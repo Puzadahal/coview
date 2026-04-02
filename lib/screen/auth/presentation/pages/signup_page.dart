@@ -121,9 +121,9 @@ class _SignupPageContentState extends State<_SignupPageContent> {
               listenWhen: (previous, current) => 
                   previous.status != current.status,
               listener: (context, state) {
-                print('[SignupPage] Status changed: ${state.status}');
+                debugPrint('[SignupPage] Status changed: ${state.status}');
                 if (state.status == SignupStatus.success) {
-                  print('[SignupPage] Success! Navigating to login...');
+                  debugPrint('[SignupPage] Success! Navigating to login...');
                   // Show success message
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -135,14 +135,14 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                   // Navigate to login after a short delay to show snackbar
                   Future.delayed(const Duration(milliseconds: 500), () {
                     if (context.mounted) {
-                      print('[SignupPage] Executing navigation to /login');
+                      debugPrint('[SignupPage] Executing navigation to /login');
                       context.go('/login');
                     } else {
-                      print('[SignupPage] Context not mounted, cannot navigate');
+                      debugPrint('[SignupPage] Context not mounted, cannot navigate');
                     }
                   });
                 } else if (state.status == SignupStatus.failure) {
-                  print('[SignupPage] Signup failed: ${state.errorMessage}');
+                  debugPrint('[SignupPage] Signup failed: ${state.errorMessage}');
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(state.errorMessage ?? 'Signup failed'),
@@ -363,12 +363,12 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                                 onPressed: state.isFormValid
                                     ? () {
                                         // Debug: Check form validity
-                                        print('Form valid: ${state.isFormValid}');
-                                        print('Name: ${state.name}');
-                                        print('Email valid: ${state.isEmailValid}');
-                                        print('Password length: ${state.password.length}');
-                                        print('Passwords match: ${state.doPasswordsMatch}');
-                                        print('Agreed to terms: ${state.agreedToTerms}');
+                                        debugPrint('Form valid: ${state.isFormValid}');
+                                        debugPrint('Name: ${state.name}');
+                                        debugPrint('Email valid: ${state.isEmailValid}');
+                                        debugPrint('Password length: ${state.password.length}');
+                                        debugPrint('Passwords match: ${state.doPasswordsMatch}');
+                                        debugPrint('Agreed to terms: ${state.agreedToTerms}');
                                         context.read<SignupBloc>().add(
                                             const SignupButtonPressed());
                                       }

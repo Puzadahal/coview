@@ -96,8 +96,7 @@ class _SplashScreenState extends State<SplashScreen>
                     child: Transform.scale(
                       scale: _scaleAnimation.value,
                       child: Padding(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 24.0),
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Column(
@@ -113,20 +112,21 @@ class _SplashScreenState extends State<SplashScreen>
                                 child: Image.asset(
                                   'assets/logo/logo.png',
                                   fit: BoxFit.contain,
-                                  errorBuilder:
-                                      (context, error, stackTrace) {
+                                  errorBuilder: (context, error, stackTrace) {
                                     return Container(
                                       decoration: BoxDecoration(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.1),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.1,
+                                        ),
                                         shape: BoxShape.circle,
                                       ),
                                       alignment: Alignment.center,
                                       child: Icon(
                                         Icons.image,
                                         size: 100,
-                                        color: Colors.white
-                                            .withValues(alpha: 0.5),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.5,
+                                        ),
                                       ),
                                     );
                                   },
@@ -139,9 +139,9 @@ class _SplashScreenState extends State<SplashScreen>
                                 style: TextStyle(
                                   fontSize: 28,
                                   fontWeight: FontWeight.bold,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onBackground,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onBackground,
                                   letterSpacing: 1.5,
                                 ),
                               ),
@@ -172,4 +172,4 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
   }
-    }
+}

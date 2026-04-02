@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart' as ypf;
 import 'package:youtube_player_iframe/youtube_player_iframe.dart' as ypi;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../config/colors/app_colors.dart';
 
@@ -85,7 +86,8 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
 
   bool get hasController =>
       _videoId.isNotEmpty &&
-      ((kIsWeb && _webController != null) || (!kIsWeb && _mobileController != null));
+      ((kIsWeb && _webController != null) ||
+          (!kIsWeb && _mobileController != null));
 
   Future<void> play() async {
     if (kIsWeb) {
@@ -130,6 +132,18 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
     return pos.inMilliseconds / 1000.0;
   }
 
+  Future<void> _openInYouTube() async {
+    final id = _videoId;
+    if (id.isEmpty) return;
+    final uri = Uri.parse('https://www.youtube.com/watch?v=$id');
+    try {
+      if (!await canLaunchUrl(uri)) return;
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // Ignore; we'll just keep the error overlay visible.
+    }
+  }
+
   @override
   void dispose() {
     _disposeControllers();
@@ -168,14 +182,40 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
                   if (value.hasError)
                     ColoredBox(
                       color: Colors.black.withValues(alpha: 0.78),
-                      child: const Padding(
-                        padding: EdgeInsets.all(16),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
                         child: Center(
-                          child: Text(
-                            'YouTube blocked this embed in this browser session.\n'
-                            'Sign in to YouTube in this browser, refresh, or use another public video link.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.white),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.videocam_off_outlined,
+                                color: Colors.white,
+                                size: 40,
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'YouTube blocked this embed in this browser session.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.white),
+                              ),
+                              const SizedBox(height: 10),
+                              FilledButton.icon(
+                                onPressed: _openInYouTube,
+                                icon: const Icon(Icons.open_in_new),
+                                label: const Text('Open in YouTube'),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'If it still fails, sign in to YouTube in Chrome and refresh.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),

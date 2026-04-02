@@ -56,7 +56,8 @@ class AppTexts {
       'ourVision': 'हाम्रो लक्ष्य',
       'recommendationsPageTitle': 'सिफारिसहरू',
       'recommendationsPageHeading': 'तपाईंको रूमका लागि ट्रेन्डिङ',
-      'recommendationsPageSub': 'एक छनोट गर्नुहोस् र साथीहरूसँग हेर्न सुरु गर्नुहोस्।',
+      'recommendationsPageSub':
+          'एक छनोट गर्नुहोस् र साथीहरूसँग हेर्न सुरु गर्नुहोस्।',
       'watchWithFriends': 'साथीसँग हेर्नुहोस्',
     },
     'hi': {
@@ -93,4 +94,3 @@ class AppTexts {
     return _text[languageCode]?[key] ?? _text['en']![key] ?? key;
   }
 }
-
