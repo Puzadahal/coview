@@ -39,7 +39,7 @@ class AuthChoicePage extends StatelessWidget {
                         SizedBox(
                           height: logoSize,
                           child: Image.asset(
-                            'assets/logo/logo.png',
+                            'assets/logo/main_logo.png',
                             fit: BoxFit.contain,
                           ),
                         ),

@@ -7,6 +7,10 @@ import 'room_event.dart';
 import 'room_state.dart';
 
 /// BLoC that manages basic room UI state (chat messages, status).
+///
+/// **Guest chat:** Users with no Firebase user or an anonymous Firebase user
+/// only see messages from the current visit (reopening the room starts fresh).
+/// Signed-in (non-anonymous) users still see full room history.
 class RoomBloc extends Bloc<RoomEvent, RoomState> {
   RoomBloc(String roomId) : super(RoomState.initial(roomId)) {
     _firestore = FirebaseFirestore.instance;
@@ -22,6 +26,26 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
   late final fb.FirebaseAuth _auth;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _messagesSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _playbackSub;
+
+  /// When non-null, this client is a guest: only show messages at/after this time.
+  DateTime? _guestChatSessionStart;
+
+  bool _isGuestForChatSession(fb.User? user) =>
+      user == null || user.isAnonymous;
+
+  /// Guests (no account or Firebase anonymous) only see chat from this visit.
+  List<RoomMessage> _filterMessagesForGuestSession(List<RoomMessage> all) {
+    final start = _guestChatSessionStart;
+    if (start == null) return all;
+    return all.where((m) {
+      final t = m.createdAt;
+      if (t == null) {
+        // Pending server timestamp — keep so new sends are not dropped.
+        return true;
+      }
+      return !t.isBefore(start);
+    }).toList();
+  }
 
   Future<void> _onInitialized(
     RoomInitialized event,
@@ -47,6 +71,13 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
       final name = data['name'] as String? ?? 'Watch Room';
       final videoUrl = data['videoUrl'] as String?;
 
+      final user = _auth.currentUser;
+      // Slightly earlier cutoff avoids dropping messages when device clock is
+      // ahead of Firestore server time.
+      _guestChatSessionStart = _isGuestForChatSession(user)
+          ? DateTime.now().subtract(const Duration(seconds: 30))
+          : null;
+
       // Start listening to room messages in Firestore
       _messagesSub?.cancel();
       _messagesSub = _firestore
@@ -69,7 +100,9 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
             createdAt: createdAt,
           );
         }).toList();
-        add(RoomMessagesUpdated(messages));
+        add(
+          RoomMessagesUpdated(_filterMessagesForGuestSession(messages)),
+        );
       });
 
       _playbackSub?.cancel();
@@ -82,10 +115,16 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
           .listen((snap) {
         final data = snap.data();
         if (data == null) return;
+        final updatedAt = data['updatedAt'];
+        int anchorMs = 0;
+        if (updatedAt is Timestamp) {
+          anchorMs = updatedAt.millisecondsSinceEpoch;
+        }
         add(
           RoomPlaybackUpdated(
             isPlaying: (data['isPlaying'] as bool?) ?? false,
             positionSeconds: (data['positionSeconds'] as num?)?.toDouble() ?? 0,
+            anchorServerTimeMs: anchorMs,
             version: (data['version'] as num?)?.toInt() ?? 0,
           ),
         );
@@ -144,7 +183,6 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
     RoomPlaybackSetRequested event,
     Emitter<RoomState> emit,
   ) async {
-    final nextVersion = state.playbackVersion + 1;
     await _firestore
         .collection('rooms')
         .doc(state.roomId)
@@ -155,7 +193,7 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
       'positionSeconds': event.positionSeconds,
       'updatedAt': FieldValue.serverTimestamp(),
       'actorId': _auth.currentUser?.uid,
-      'version': nextVersion,
+      'version': FieldValue.increment(1),
     }, SetOptions(merge: true));
   }
 
@@ -167,6 +205,7 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
       state.copyWith(
         isPlaying: event.isPlaying,
         playbackPositionSeconds: event.positionSeconds,
+        playbackAnchorServerTimeMs: event.anchorServerTimeMs,
         playbackVersion: event.version,
       ),
     );

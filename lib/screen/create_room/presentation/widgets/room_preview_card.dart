@@ -39,12 +39,12 @@ class RoomPreviewCard extends StatelessWidget {
             Image.network(
               thumbnailUrl,
               width: double.infinity,
-              height: 200,
+              height: 280,
               fit: BoxFit.cover,
               loadingBuilder: (context, child, loadingProgress) {
                 if (loadingProgress == null) return child;
                 return Container(
-                  height: 200,
+                  height: 280,
                   color: isDark
                       ? AppColors.primaryDarkVariant
                       : AppColors.backgroundGrey,
@@ -61,7 +61,7 @@ class RoomPreviewCard extends StatelessWidget {
               },
               errorBuilder: (context, error, stackTrace) {
                 return Container(
-                  height: 200,
+                  height: 280,
                   color: isDark
                       ? AppColors.primaryDarkVariant
                       : AppColors.backgroundGrey,

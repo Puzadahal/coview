@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -9,9 +10,13 @@ import 'package:video_player/video_player.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/sync/ntp_clock.dart';
+import '../../../../core/sync/playback_sync_math.dart';
+import '../../../../core/utils/invite_link.dart';
 import '../../domain/bloc/room_bloc.dart';
 import '../../domain/bloc/room_event.dart';
 import '../../domain/bloc/room_state.dart';
+import '../widgets/room_share_sheet.dart';
 import '../widgets/youtube_player_view.dart';
 import '../../domain/room_call_service.dart';
 
@@ -25,7 +30,7 @@ class RoomPage extends StatefulWidget {
   State<RoomPage> createState() => _RoomPageState();
 }
 
-class _RoomPageState extends State<RoomPage> {
+class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   final TextEditingController _messageController = TextEditingController();
   VideoPlayerController? _videoController;
   Future<void>? _initializeVideoFuture;
@@ -36,13 +41,38 @@ class _RoomPageState extends State<RoomPage> {
   MediaStream? _localCallStream;
   final _localRenderer = RTCVideoRenderer();
   int _lastPlaybackVersionApplied = -1;
+  Timer? _driftTimer;
+  Timer? _playbackSpeedResetTimer;
+  RoomStatus _listenerPrevStatus = RoomStatus.viewing;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    NtpClock.instance.refresh();
+    _driftTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(_correctDriftOnce());
+    });
+  }
 
   @override
   void dispose() {
+    _driftTimer?.cancel();
+    _playbackSpeedResetTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _videoController?.dispose();
     _localRenderer.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      NtpClock.instance.refresh();
+      final s = context.read<RoomBloc>().state;
+      unawaited(_applyPlaybackFromFirestore(s, force: true));
+    }
   }
 
   void _sendMessage() {
@@ -82,22 +112,164 @@ class _RoomPageState extends State<RoomPage> {
     }
   }
 
-  Future<void> _applyRemotePlayback(RoomState state) async {
-    if (state.playbackVersion == _lastPlaybackVersionApplied) return;
-    _lastPlaybackVersionApplied = state.playbackVersion;
+  double _targetPositionSeconds(RoomState state) {
+    return PlaybackSyncMath.expectedPositionSeconds(
+      anchorPositionSeconds: state.playbackPositionSeconds,
+      isPlaying: state.isPlaying,
+      anchorServerTimeMs: state.playbackAnchorServerTimeMs,
+      ntpNowMs: NtpClock.instance.nowMs,
+    );
+  }
 
-    if (state.playbackPositionSeconds >= 0) {
-      if (_isYouTubeUrl(state.videoUrl ?? '')) {
-        await _youtubeKey.currentState?.seekToSeconds(
-          state.playbackPositionSeconds,
-        );
-      } else if (_videoController != null) {
-        await _videoController!.seekTo(
-          Duration(milliseconds: (state.playbackPositionSeconds * 1000).round()),
-        );
-      }
+  /// True once Firestore has delivered a `playback/state` document (version ≥ 1).
+  /// Until then we must not force pause/seek from default bloc state or drift —
+  /// that was stopping playback ~1–2s after the user hit play.
+  bool _hasRemotePlaybackState(RoomState state) => state.playbackVersion > 0;
+
+  /// Applies Firestore master playback (seek + play/pause). Uses NTP-aligned
+  /// time so everyone converges on the same instant in the video.
+  Future<void> _applyPlaybackFromFirestore(
+    RoomState state, {
+    bool force = false,
+  }) async {
+    if (!_hasRemotePlaybackState(state)) {
+      return;
+    }
+    if (!force) {
+      if (state.playbackVersion == _lastPlaybackVersionApplied) return;
+      _lastPlaybackVersionApplied = state.playbackVersion;
+    }
+
+    final target = _targetPositionSeconds(state);
+    if (target >= 0) {
+      await _seekLocalTo(state, target);
     }
     await _setPlaying(state, state.isPlaying);
+  }
+
+  Future<void> _seekLocalTo(RoomState state, double seconds) async {
+    if (seconds.isNaN) return;
+    final safe = seconds < 0 ? 0.0 : seconds;
+    if (_isYouTubeUrl(state.videoUrl ?? '')) {
+      await _youtubeKey.currentState?.seekToSeconds(safe);
+    } else if (_videoController != null &&
+        _videoController!.value.isInitialized) {
+      await _videoController!.seekTo(
+        Duration(milliseconds: (safe * 1000).round()),
+      );
+    }
+  }
+
+  Future<void> _seekRoomBy(RoomState state, double deltaSeconds) async {
+    final cur = await _currentPositionSeconds(state);
+    final next = cur + deltaSeconds;
+    final clamped = next < 0 ? 0.0 : next;
+    await _seekLocalTo(state, clamped);
+    if (!mounted) return;
+    context.read<RoomBloc>().add(
+          RoomPlaybackSetRequested(
+            isPlaying: state.isPlaying,
+            positionSeconds: clamped,
+          ),
+        );
+  }
+
+  Future<void> _seekRoomToStart(RoomState state) async {
+    await _seekLocalTo(state, 0);
+    if (!mounted) return;
+    context.read<RoomBloc>().add(
+          RoomPlaybackSetRequested(
+            isPlaying: state.isPlaying,
+            positionSeconds: 0,
+          ),
+        );
+  }
+
+  void _schedulePlaybackSpeedReset(VideoPlayerController vc) {
+    _playbackSpeedResetTimer?.cancel();
+    _playbackSpeedResetTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      vc.setPlaybackSpeed(1.0);
+    });
+  }
+
+  Future<void> _correctDriftOnce() async {
+    if (!mounted) return;
+    final state = context.read<RoomBloc>().state;
+    if (state.status != RoomStatus.viewing) return;
+    if (!_hasRemotePlaybackState(state)) {
+      return;
+    }
+    final url = state.videoUrl?.trim() ?? '';
+    if (url.isEmpty || _isLikelyLocalPath(url)) return;
+
+    final expected = _targetPositionSeconds(state);
+    final local = await _currentPositionSeconds(state);
+
+    if (_isYouTubeUrl(url)) {
+      final playing = await _youtubeKey.currentState?.isPlaying() ?? false;
+      if (state.isPlaying != playing) {
+        await _setPlaying(state, state.isPlaying);
+      }
+      if ((expected - local).abs() > 0.5) {
+        await _youtubeKey.currentState?.seekToSeconds(expected);
+      }
+      return;
+    }
+
+    final vc = _videoController;
+    if (vc == null || !vc.value.isInitialized) return;
+
+    if (state.isPlaying != vc.value.isPlaying) {
+      await _setPlaying(state, state.isPlaying);
+    }
+
+    final decision = PlaybackSyncMath.driftDecision(
+      expectedSeconds: expected,
+      localSeconds: local,
+    );
+    switch (decision.kind) {
+      case DriftKind.none:
+        break;
+      case DriftKind.hardSeek:
+        final to = decision.seekToSeconds ?? expected;
+        await vc.seekTo(
+          Duration(milliseconds: (to * 1000).round()),
+        );
+        _schedulePlaybackSpeedReset(vc);
+        break;
+      case DriftKind.softRate:
+        if (!state.isPlaying) break;
+        final rate = decision.catchUp ? 1.06 : 0.94;
+        await vc.setPlaybackSpeed(rate);
+        _schedulePlaybackSpeedReset(vc);
+        break;
+    }
+  }
+
+  Future<void> _inviteFriends(BuildContext context) async {
+    final roomName =
+        context.read<RoomBloc>().state.roomName ?? 'Coview watch room';
+    final roomId = widget.roomId;
+    final pathLink = '/join/$roomId';
+    final resolved = buildShareableInviteLink(
+      inviteLink: pathLink,
+      roomId: roomId,
+    );
+
+    final isFullUrl = resolved.startsWith('http');
+    final body = isFullUrl
+        ? 'You\'re invited to watch together: "$roomName"\n\n$resolved\n\nOpen the link to join this room in Coview.'
+        : 'You\'re invited to watch together: "$roomName"\n\nRoom code: $resolved\n\nIn Coview, open Join Room and paste this code (or any invite link).';
+
+    if (!context.mounted) return;
+    await showRoomShareSheet(
+      context,
+      roomName: roomName,
+      shareBody: body,
+      resolvedLink: resolved,
+      isFullUrl: isFullUrl,
+    );
   }
 
   Future<void> _togglePlayback(RoomState state) async {
@@ -167,16 +339,9 @@ class _RoomPageState extends State<RoomPage> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Invite',
+            tooltip: 'Invite friends',
             icon: const Icon(Icons.ios_share),
-            onPressed: () {
-              // For now just show a hint; backend/deep link can be wired later.
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Share the invite link from the Create Room screen.'),
-                ),
-              );
-            },
+            onPressed: () => unawaited(_inviteFriends(context)),
           ),
           const SizedBox(width: 8),
         ],
@@ -201,10 +366,24 @@ class _RoomPageState extends State<RoomPage> {
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(AppConstants.spacingMedium),
-            child: BlocBuilder<RoomBloc, RoomState>(
-              builder: (context, state) {
+            child: BlocListener<RoomBloc, RoomState>(
+              listenWhen: (p, c) =>
+                  c.playbackVersion != p.playbackVersion ||
+                  c.status != p.status,
+              listener: (context, state) {
+                final cameFromLoading =
+                    _listenerPrevStatus == RoomStatus.loading &&
+                        state.status == RoomStatus.viewing;
+                _listenerPrevStatus = state.status;
+                final versionBump =
+                    state.playbackVersion != _lastPlaybackVersionApplied;
+                if (!versionBump && !cameFromLoading) return;
+                final force = cameFromLoading && !versionBump;
+                unawaited(_applyPlaybackFromFirestore(state, force: force));
+              },
+              child: BlocBuilder<RoomBloc, RoomState>(
+                builder: (context, state) {
                 _setupVideoController(state.videoUrl);
-                _applyRemotePlayback(state);
 
                 if (state.status == RoomStatus.loading) {
                   return const Center(child: CircularProgressIndicator());
@@ -227,7 +406,7 @@ class _RoomPageState extends State<RoomPage> {
                     ? Row(
                         children: [
                           Expanded(
-                            flex: 3,
+                            flex: 5,
                             child: _buildVideoPane(
                               theme,
                               isDark,
@@ -250,7 +429,8 @@ class _RoomPageState extends State<RoomPage> {
                           ),
                         ],
                       );
-              },
+                },
+              ),
             ),
           ),
         ),
@@ -305,9 +485,13 @@ class _RoomPageState extends State<RoomPage> {
       _videoController = VideoPlayerController.file(File(url));
     }
     _currentVideoUrl = url;
-    _initializeVideoFuture = _videoController!.initialize().then((_) {
+    _initializeVideoFuture = _videoController!.initialize().then((_) async {
+      if (!mounted) return;
       setState(() {});
-      _videoController!.play();
+      final s = context.read<RoomBloc>().state;
+      if (_hasRemotePlaybackState(s)) {
+        await _applyPlaybackFromFirestore(s, force: true);
+      }
     });
   }
 
@@ -472,14 +656,9 @@ class _RoomPageState extends State<RoomPage> {
                                                   : Icons.play_circle_fill,
                                             ),
                                             onPressed: () {
-                                              setState(() {
-                                                if (_videoController!
-                                                    .value.isPlaying) {
-                                                  _videoController!.pause();
-                                                } else {
-                                                  _videoController!.play();
-                                                }
-                                              });
+                                              final rs =
+                                                  context.read<RoomBloc>().state;
+                                              unawaited(_togglePlayback(rs));
                                             },
                                           ),
                                         ],
@@ -588,11 +767,11 @@ class _RoomPageState extends State<RoomPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    onPressed: () {},
+                    onPressed: () => unawaited(_seekRoomBy(state, -10)),
                     icon: const Icon(Icons.replay_10),
                   ),
                   IconButton(
-                    onPressed: () {},
+                    onPressed: () => unawaited(_seekRoomToStart(state)),
                     icon: const Icon(Icons.skip_previous),
                   ),
                   Container(
@@ -609,11 +788,11 @@ class _RoomPageState extends State<RoomPage> {
                     ),
                   ),
                   IconButton(
-                    onPressed: () {},
+                    onPressed: () => unawaited(_seekRoomBy(state, 30)),
                     icon: const Icon(Icons.skip_next),
                   ),
                   IconButton(
-                    onPressed: () {},
+                    onPressed: () => unawaited(_seekRoomBy(state, 10)),
                     icon: const Icon(Icons.forward_10),
                   ),
                   const SizedBox(width: 12),

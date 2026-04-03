@@ -26,6 +26,8 @@ class RoomState extends Equatable {
   final String? videoUrl;
   final bool isPlaying;
   final double playbackPositionSeconds;
+  /// Firestore `updatedAt` (ms since epoch) when [playbackPositionSeconds] was written.
+  final int playbackAnchorServerTimeMs;
   final int playbackVersion;
 
   const RoomState({
@@ -37,6 +39,7 @@ class RoomState extends Equatable {
     this.videoUrl,
     this.isPlaying = false,
     this.playbackPositionSeconds = 0,
+    this.playbackAnchorServerTimeMs = 0,
     this.playbackVersion = 0,
   });
 
@@ -56,6 +59,7 @@ class RoomState extends Equatable {
     String? videoUrl,
     bool? isPlaying,
     double? playbackPositionSeconds,
+    int? playbackAnchorServerTimeMs,
     int? playbackVersion,
   }) {
     return RoomState(
@@ -68,6 +72,8 @@ class RoomState extends Equatable {
       isPlaying: isPlaying ?? this.isPlaying,
       playbackPositionSeconds:
           playbackPositionSeconds ?? this.playbackPositionSeconds,
+      playbackAnchorServerTimeMs:
+          playbackAnchorServerTimeMs ?? this.playbackAnchorServerTimeMs,
       playbackVersion: playbackVersion ?? this.playbackVersion,
     );
   }
@@ -82,6 +88,7 @@ class RoomState extends Equatable {
         videoUrl,
         isPlaying,
         playbackPositionSeconds,
+        playbackAnchorServerTimeMs,
         playbackVersion,
       ];
 }

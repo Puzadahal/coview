@@ -51,15 +51,18 @@ class RoomPlaybackSetRequested extends RoomEvent {
 class RoomPlaybackUpdated extends RoomEvent {
   final bool isPlaying;
   final double positionSeconds;
+  /// [Timestamp.millisecondsSinceEpoch] from the same document write.
+  final int anchorServerTimeMs;
   final int version;
 
   const RoomPlaybackUpdated({
     required this.isPlaying,
     required this.positionSeconds,
+    required this.anchorServerTimeMs,
     required this.version,
   });
 
   @override
-  List<Object?> get props => [isPlaying, positionSeconds, version];
+  List<Object?> get props => [isPlaying, positionSeconds, anchorServerTimeMs, version];
 }
 

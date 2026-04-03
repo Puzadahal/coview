@@ -57,5 +57,26 @@
         </intent>
         <!-- YouTube app (optional; helps some devices resolve youtube:// / watch links) -->
         <package android:name="com.google.android.youtube" />
+        <!-- Deep links: open WhatsApp, Messenger, Telegram, Discord from share sheet -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="whatsapp" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="fb-messenger" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="tg" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="discord" />
+        </intent>
+        <package android:name="com.whatsapp" />
+        <package android:name="com.facebook.orca" />
+        <package android:name="org.telegram.messenger" />
+        <package android:name="com.discord" />
     </queries>
 </manifest>

@@ -3,22 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/utils/invite_link.dart';
 import '../../../../core/widgets/glass_form_card.dart';
-
-/// Full invite URL on web; on mobile/desktop `Uri.base` is often `file://` and
-/// has no [Uri.origin] — use room id so friends can paste it in Join Room.
-String buildShareableInviteLink({
-  required String inviteLink,
-  required String roomId,
-}) {
-  if (inviteLink.startsWith('http')) return inviteLink;
-  final base = Uri.base;
-  final scheme = base.scheme.toLowerCase();
-  if (scheme == 'http' || scheme == 'https') {
-    return '${base.origin}/#/join/$roomId';
-  }
-  return roomId;
-}
 
 /// Success Dialog shown after room creation with copyable invite link
 class CreateRoomSuccessDialog extends StatelessWidget {

@@ -8,6 +8,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   firebase_core
   flutter_inappwebview_windows
   flutter_webrtc
+  share_plus
   url_launcher_windows
 )
 

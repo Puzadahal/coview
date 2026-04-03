@@ -110,7 +110,7 @@ class _SplashScreenState extends State<SplashScreen>
                                   constraints.maxHeight * 0.4,
                                 ),
                                 child: Image.asset(
-                                  'assets/logo/logo.png',
+                                  'assets/logo/main_logo.png',
                                   fit: BoxFit.contain,
                                   errorBuilder: (context, error, stackTrace) {
                                     return Container(

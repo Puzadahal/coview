@@ -45,5 +45,12 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>whatsapp</string>
+		<string>fb-messenger</string>
+		<string>tg</string>
+		<string>discord</string>
+	</array>
 </dict>
 </plist>

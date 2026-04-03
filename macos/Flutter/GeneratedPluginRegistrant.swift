@@ -11,6 +11,7 @@ import firebase_core
 import flutter_inappwebview_macos
 import flutter_webrtc
 import google_sign_in_ios
+import share_plus
 import shared_preferences_foundation
 import url_launcher_macos
 import video_player_avfoundation
@@ -23,6 +24,7 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   InAppWebViewFlutterPlugin.register(with: registry.registrar(forPlugin: "InAppWebViewFlutterPlugin"))
   FlutterWebRTCPlugin.register(with: registry.registrar(forPlugin: "FlutterWebRTCPlugin"))
   FLTGoogleSignInPlugin.register(with: registry.registrar(forPlugin: "FLTGoogleSignInPlugin"))
+  SharePlusMacosPlugin.register(with: registry.registrar(forPlugin: "SharePlusMacosPlugin"))
   SharedPreferencesPlugin.register(with: registry.registrar(forPlugin: "SharedPreferencesPlugin"))
   UrlLauncherPlugin.register(with: registry.registrar(forPlugin: "UrlLauncherPlugin"))
   FVPVideoPlayerPlugin.register(with: registry.registrar(forPlugin: "FVPVideoPlayerPlugin"))
