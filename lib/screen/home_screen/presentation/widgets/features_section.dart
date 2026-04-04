@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// Real-time features list section.
 class FeaturesSection extends StatelessWidget {
   const FeaturesSection({super.key});
 

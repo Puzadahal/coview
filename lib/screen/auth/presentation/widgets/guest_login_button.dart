@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// Guest login button with pulse animation
 class GuestLoginButton extends StatefulWidget {
   final VoidCallback onPressed;
 

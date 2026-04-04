@@ -5,7 +5,6 @@ import '../../../../config/colors/app_colors.dart';
 import '../../domain/bloc/home_bloc.dart';
 import '../../domain/bloc/home_event.dart';
 
-/// Cinematic video background with overlay for text readability.
 class VideoBackground extends StatefulWidget {
   final String? videoPath;
   final Widget child;
@@ -35,13 +34,12 @@ class _VideoBackgroundState extends State<VideoBackground> {
       _controller = VideoPlayerController.asset(widget.videoPath!);
       await _controller!.initialize();
       _controller!.setLooping(true);
-      _controller!.setVolume(0); // Muted
+      _controller!.setVolume(0);
       _controller!.play();
       if (mounted) {
         setState(() {
           _isInitialized = true;
         });
-        // Notify BLoC that video loaded successfully
         context.read<HomeBloc>().add(const VideoLoaded());
       }
     } catch (e) {
@@ -49,7 +47,6 @@ class _VideoBackgroundState extends State<VideoBackground> {
         setState(() {
           _isInitialized = true;
         });
-        // Notify BLoC of video error
         context.read<HomeBloc>().add(VideoError(e.toString()));
       }
     }
@@ -66,7 +63,6 @@ class _VideoBackgroundState extends State<VideoBackground> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Video background or gradient fallback
         if (_controller != null &&
             _isInitialized &&
             _controller!.value.isInitialized)
@@ -81,25 +77,22 @@ class _VideoBackgroundState extends State<VideoBackground> {
             ),
           )
         else
-          // Fallback gradient matching the video description
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFF1A0B2E), // Deep purple
-                  const Color(0xFF16213E), // Dark teal
-                  const Color(0xFF0F3460), // Darker teal
+                  const Color(0xFF1A0B2E),
+                  const Color(0xFF16213E),
+                  const Color(0xFF0F3460),
                   AppColors.primaryDark,
                 ],
                 stops: const [0.0, 0.3, 0.7, 1.0],
               ),
             ),
           ),
-        // Dark overlay for text readability (0.4 opacity)
         Container(color: Colors.black.withValues(alpha: 0.4)),
-        // Content
         widget.child,
       ],
     );

@@ -6,10 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../config/colors/app_colors.dart';
 
-/// In-app YouTube playback for both web and mobile.
-///
-/// - Web: youtube_player_iframe (stable for browser runtime)
-/// - Mobile/Desktop: youtube_player_flutter
 class YoutubePlayerView extends StatefulWidget {
   final String videoUrl;
 
@@ -50,8 +46,6 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
     if (kIsWeb) {
       _webController = ypi.YoutubePlayerController.fromVideoId(
         videoId: _videoId,
-        // Autoplay inside embedded browsers often triggers YouTube
-        // "sign in to confirm you're not a bot". Let the user press play.
         autoPlay: false,
         params: const ypi.YoutubePlayerParams(
           showControls: true,
@@ -139,9 +133,7 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
     try {
       if (!await canLaunchUrl(uri)) return;
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      // Ignore; we'll just keep the error overlay visible.
-    }
+    } catch (_) {}
   }
 
   @override

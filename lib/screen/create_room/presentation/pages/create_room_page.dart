@@ -52,7 +52,6 @@ class _CreateRoomPageContent extends StatelessWidget {
         listenWhen: (previous, current) => previous.status != current.status,
         listener: (context, state) {
           if (state.status == CreateRoomStatus.success) {
-            // Show success dialog with invite link
             showDialog(
               context: context,
               barrierDismissible: false,
@@ -79,7 +78,6 @@ class _CreateRoomPageContent extends StatelessWidget {
               child: GlassFormCard(
                 padding: const EdgeInsets.all(AppConstants.spacingXLarge),
                 children: [
-                  // Title
                   Column(
                     children: [
                       Text(
@@ -112,15 +110,12 @@ class _CreateRoomPageContent extends StatelessWidget {
                   ),
                   const SizedBox(height: 36),
 
-                  // Room Name Field
                   _RoomNameField(),
                   const SizedBox(height: 24),
 
-                  // Video URL Field
                   _VideoUrlField(),
                   const SizedBox(height: 24),
 
-                  // Room Preview (shown when URL is valid)
                   BlocBuilder<CreateRoomBloc, CreateRoomState>(
                     buildWhen: (previous, current) =>
                         previous.isUrlValid != current.isUrlValid ||
@@ -140,15 +135,12 @@ class _CreateRoomPageContent extends StatelessWidget {
                     },
                   ),
 
-                  // Privacy Toggle (Single Toggle)
                   _PrivacyToggle(),
                   const SizedBox(height: 24),
 
-                  // Advanced Settings
                   _AdvancedSettingsSection(),
                   const SizedBox(height: 32),
 
-                  // Launch Party Button
                   _LaunchPartyButton(),
                 ],
               ),
@@ -160,7 +152,6 @@ class _CreateRoomPageContent extends StatelessWidget {
   }
 }
 
-/// Room Name Input Field
 class _RoomNameField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -235,7 +226,6 @@ class _RoomNameField extends StatelessWidget {
   }
 }
 
-/// Video URL Input Field
 class _VideoUrlField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -317,7 +307,6 @@ class _VideoUrlField extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: 8),
-            // Upload Video Button
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -354,7 +343,6 @@ class _VideoUrlField extends StatelessWidget {
   }
 }
 
-/// Privacy Toggle Switch (Single Toggle: ON = Private, OFF = Public)
 class _PrivacyToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -443,7 +431,6 @@ class _PrivacyToggle extends StatelessWidget {
   }
 }
 
-/// Advanced Settings Section
 class _AdvancedSettingsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -534,7 +521,6 @@ class _AdvancedSettingsSection extends StatelessWidget {
   }
 }
 
-/// Participant Limit Field
 class _ParticipantLimitField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -665,7 +651,6 @@ class _ParticipantLimitField extends StatelessWidget {
                           );
                         }
                       : () {
-                          // Show message when trying to exceed limit
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Row(
@@ -705,7 +690,6 @@ class _ParticipantLimitField extends StatelessWidget {
   }
 }
 
-/// Communication Options
 class _CommunicationOptions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -770,7 +754,6 @@ class _CommunicationOptions extends StatelessWidget {
   }
 }
 
-/// Communication Toggle Item
 class _CommunicationToggle extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -822,7 +805,6 @@ class _CommunicationToggle extends StatelessWidget {
   }
 }
 
-/// Launch Party Button
 class _LaunchPartyButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {

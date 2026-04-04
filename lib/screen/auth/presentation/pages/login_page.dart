@@ -59,10 +59,8 @@ class _LoginPageContentState extends State<_LoginPageContent> {
     _emailFocusNode.addListener(_onEmailFocusChange);
     _passwordFocusNode.addListener(_onPasswordFocusChange);
 
-    // Auto-join as guest if invite link is present (WatchParty.me style)
     if (widget.inviteHostName != null && widget.inviteHostName!.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Small delay for better UX
         Future.delayed(const Duration(milliseconds: 500), () {
           if (mounted) {
             context.read<LoginBloc>().add(const GuestLoginRequested());
@@ -345,7 +343,6 @@ class _LoginPageContentState extends State<_LoginPageContent> {
                               },
                             ),
                             const SizedBox(height: 24),
-                            // Social Auth Section (Google only)
                             SocialAuthButtons(
                               onGooglePressed: () {
                                 context.read<LoginBloc>().add(

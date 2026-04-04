@@ -21,7 +21,6 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
     _setupAnimations();
 
-    // Start animation after first frame so content is built and visible
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _animationController.forward();
     });
@@ -33,8 +32,6 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.delayed(const Duration(seconds: 3));
     if (!mounted) return;
 
-    // Prefer FirebaseAuth for real auth state, with SharedPreferences
-    // as a simple local hint.
     final currentUser = fb.FirebaseAuth.instance.currentUser;
     bool wasLoggedInFlag = false;
     try {
@@ -55,7 +52,6 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 1500),
     );
 
-    // Start visible (0.4) so content shows even before animation runs
     _fadeAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,

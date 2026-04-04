@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// Room Preview Card - Shows video thumbnail when URL is valid
 class RoomPreviewCard extends StatelessWidget {
   final String thumbnailUrl;
 
@@ -35,7 +34,6 @@ class RoomPreviewCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
         child: Stack(
           children: [
-            // Thumbnail Image
             Image.network(
               thumbnailUrl,
               width: double.infinity,
@@ -75,7 +73,6 @@ class RoomPreviewCard extends StatelessWidget {
                 );
               },
             ),
-            // Overlay with play icon
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(

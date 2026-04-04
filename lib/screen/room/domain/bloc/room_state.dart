@@ -26,7 +26,6 @@ class RoomState extends Equatable {
   final String? videoUrl;
   final bool isPlaying;
   final double playbackPositionSeconds;
-  /// Firestore `updatedAt` (ms since epoch) when [playbackPositionSeconds] was written.
   final int playbackAnchorServerTimeMs;
   final int playbackVersion;
 

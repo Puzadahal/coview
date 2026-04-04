@@ -8,7 +8,6 @@ class AuthMethods {
   final fb.FirebaseAuth _auth = fb.FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// Email + password signup using Firebase Auth and Firestore.
   Future<User> signUpWithEmail({
     required String name,
     required String email,
@@ -24,8 +23,6 @@ class AuthMethods {
         throw Exception('Signup failed. Please try again.');
       }
 
-      // Keep FirebaseAuth profile in sync so we can easily show the
-      // user name and email on the Profile page.
       await firebaseUser.updateDisplayName(name);
 
       await _firestore.collection('users').doc(firebaseUser.uid).set({
@@ -42,7 +39,6 @@ class AuthMethods {
         name: name,
       );
     } on fb.FirebaseAuthException catch (e) {
-      // Map common Firebase error codes to clear messages.
       switch (e.code) {
         case 'email-already-in-use':
           throw Exception(
@@ -64,7 +60,6 @@ class AuthMethods {
     }
   }
 
-  /// Email + password login using Firebase Auth.
   Future<User> signInWithEmail({
     required String email,
     required String password,
@@ -79,7 +74,6 @@ class AuthMethods {
         throw Exception('Login failed. Please try again.');
       }
 
-      // Read profile from Firestore (if present) to get name.
       final doc = await _firestore.collection('users').doc(firebaseUser.uid).get();
       final data = doc.data();
       final name = (data?['name'] as String?) ?? (firebaseUser.email ?? '').split('@').first;
@@ -106,7 +100,6 @@ class AuthMethods {
     }
   }
 
-  /// Google sign‑in using Firebase Auth and Firestore.
   Future<User?> signInWithGoogle() async {
     try {
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();

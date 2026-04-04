@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// "SyncView" logo that subtly glows/pulses in sync with keystrokes (kinetic typography).
 class KineticLogo extends StatefulWidget {
-  /// Trigger glow when this value changes (e.g. length of email or name).
   final int keystrokeTrigger;
 
   const KineticLogo({

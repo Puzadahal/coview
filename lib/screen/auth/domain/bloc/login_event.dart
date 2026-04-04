@@ -58,13 +58,10 @@ class LoginButtonPressed extends LoginEvent {
   const LoginButtonPressed();
 }
 
-/// Guest login requested event - user wants to join as guest
 class GuestLoginRequested extends LoginEvent {
   const GuestLoginRequested();
 }
-  
 
-
-  class GoogleLoginRequested extends LoginEvent {
+class GoogleLoginRequested extends LoginEvent {
   const GoogleLoginRequested();
 }

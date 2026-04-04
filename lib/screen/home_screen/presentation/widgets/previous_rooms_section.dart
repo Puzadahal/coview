@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// Previous Rooms section - Only visible for registered users
 class PreviousRoomsSection extends StatelessWidget {
   const PreviousRoomsSection({super.key});
 

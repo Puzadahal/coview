@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// Hero section with headline and CTA button.
 class HeroSection extends StatelessWidget {
   final VoidCallback? onStartWatching;
   final VoidCallback? onCreateRoom;

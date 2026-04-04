@@ -7,7 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../data/room_share_recents_store.dart';
 
-/// Room invite dialog: saved people + social / app shortcuts + system share.
 Future<void> showRoomShareSheet(
   BuildContext context, {
   required String roomName,
@@ -64,7 +63,6 @@ class _RoomShareDialogState extends State<_RoomShareDialog> {
     }
   }
 
-  /// Tries custom URL schemes first so the installed app opens (mobile).
   Future<bool> _tryLaunchUris(List<Uri> uris) async {
     for (final u in uris) {
       try {
@@ -250,7 +248,6 @@ class _RoomShareDialogState extends State<_RoomShareDialog> {
     await _launch(Uri.parse('sms:?body=$body'), fallbackCopy: widget.shareBody);
   }
 
-  /// Returns true if the URL opened in another app/tab.
   Future<bool> _launch(Uri uri, {String? fallbackCopy}) async {
     try {
       final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);

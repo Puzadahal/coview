@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// Host induction card - explains benefits of signing up
 class HostInductionCard extends StatelessWidget {
   const HostInductionCard({super.key});
 

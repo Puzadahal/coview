@@ -1,7 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'room_state.dart';
 
-/// Events for the Coview room (chat + playback shell).
 abstract class RoomEvent extends Equatable {
   const RoomEvent();
 
@@ -13,7 +12,6 @@ class RoomInitialized extends RoomEvent {
   const RoomInitialized();
 }
 
-/// User sends a chat message.
 class RoomMessageSent extends RoomEvent {
   final String text;
 
@@ -23,7 +21,6 @@ class RoomMessageSent extends RoomEvent {
   List<Object?> get props => [text];
 }
 
-/// Incoming messages snapshot from backend.
 class RoomMessagesUpdated extends RoomEvent {
   final List<RoomMessage> messages;
 
@@ -33,7 +30,6 @@ class RoomMessagesUpdated extends RoomEvent {
   List<Object?> get props => [messages];
 }
 
-/// User requests play/pause for room-wide sync.
 class RoomPlaybackSetRequested extends RoomEvent {
   final bool isPlaying;
   final double positionSeconds;
@@ -47,11 +43,9 @@ class RoomPlaybackSetRequested extends RoomEvent {
   List<Object?> get props => [isPlaying, positionSeconds];
 }
 
-/// Incoming playback state from backend.
 class RoomPlaybackUpdated extends RoomEvent {
   final bool isPlaying;
   final double positionSeconds;
-  /// [Timestamp.millisecondsSinceEpoch] from the same document write.
   final int anchorServerTimeMs;
   final int version;
 

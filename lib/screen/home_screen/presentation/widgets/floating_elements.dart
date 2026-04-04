@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
-/// Floating sync icons and chat bubbles that pulse and drift.
 class FloatingElements extends StatefulWidget {
   const FloatingElements({super.key});
 
@@ -49,7 +48,6 @@ class _FloatingElementsState extends State<FloatingElements>
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Floating sync icons
         ...List.generate(4, (index) {
           return Positioned(
             left: (index % 2 == 0) ? 20.0 : null,
@@ -75,7 +73,6 @@ class _FloatingElementsState extends State<FloatingElements>
             ),
           );
         }),
-        // Floating chat bubbles
         ...List.generate(4, (index) {
           return Positioned(
             left: (index % 2 == 0) ? 40.0 : null,

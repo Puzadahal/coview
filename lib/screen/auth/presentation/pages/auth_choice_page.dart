@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// Simple gateway shown after splash: Login, Register, Continue as Guest.
 class AuthChoicePage extends StatelessWidget {
   const AuthChoicePage({super.key});
 
@@ -30,7 +29,6 @@ class AuthChoicePage extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                  // Logo / brand
                   Container(
                     alignment: Alignment.center,
                     child: Column(
@@ -67,7 +65,6 @@ class AuthChoicePage extends StatelessWidget {
                   ),
                   const SizedBox(height: AppConstants.spacingXLarge),
 
-                  // Primary actions
                   SizedBox(
                     height: AppConstants.buttonHeightLarge,
                     child: ElevatedButton(
@@ -97,7 +94,6 @@ class AuthChoicePage extends StatelessWidget {
                   ),
                   const SizedBox(height: AppConstants.spacingLarge),
 
-                  // Continue as guest
                   Text(
                     'Just want to jump in?',
                     textAlign: TextAlign.center,

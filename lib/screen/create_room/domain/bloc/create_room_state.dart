@@ -1,7 +1,6 @@
 import 'package:equatable/equatable.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// Create Room state
 class CreateRoomState extends Equatable {
   final String roomName;
   final String videoUrl;
@@ -37,7 +36,6 @@ class CreateRoomState extends Equatable {
     this.inviteLink,
   });
 
-  /// Check if form is valid
   bool get isFormValid {
     return roomName.trim().isNotEmpty && 
            videoUrl.trim().isNotEmpty && 
@@ -100,7 +98,6 @@ class CreateRoomState extends Equatable {
       ];
 }
 
-/// Create Room status enum
 enum CreateRoomStatus {
   initial,
   validating,

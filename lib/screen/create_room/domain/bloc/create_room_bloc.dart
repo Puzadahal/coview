@@ -6,7 +6,6 @@ import '../../../../core/constants/app_constants.dart';
 import 'create_room_event.dart';
 import 'create_room_state.dart';
 
-/// BLoC for managing Create Room state
 class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
   CreateRoomBloc() : super(const CreateRoomState()) {
     _firestore = FirebaseFirestore.instance;
@@ -47,7 +46,6 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
       status: CreateRoomStatus.validating,
     ));
 
-    // Validate URL and get thumbnail
     if (normalized.trim().isNotEmpty) {
       final isValid = _validateUrl(normalized);
       String? thumbnail;
@@ -88,7 +86,6 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     ParticipantLimitChanged event,
     Emitter<CreateRoomState> emit,
   ) {
-    // Clamp the limit between min and max to enforce server constraints
     final clampedLimit = event.limit.clamp(
       AppConstants.minParticipantLimit,
       AppConstants.maxParticipantLimit,
@@ -141,8 +138,6 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     try {
       fb.User? currentUser = _auth.currentUser;
 
-      // Firestore rules typically require request.auth != null to create a room.
-      // Guests are not signed in until we use anonymous auth.
       if (currentUser == null) {
         try {
           final cred = await _auth.signInAnonymously();
@@ -179,9 +174,6 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
 
       await _firestore.collection('rooms').doc(roomId).set(roomData);
 
-      // Store room under the host's history if logged in. Kept separate from the
-      // main room write so a denied write here (e.g. missing rules for
-      // users/{uid}/rooms/{roomId}) does not fail room creation.
       if (currentUser != null) {
         try {
           final userRoomsRef = _firestore
@@ -201,8 +193,6 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
         }
       }
 
-      // Store a relative link; the UI will turn this into a full sharable URL
-      // based on the current host (useful for localhost vs production).
       final inviteLink = '/join/$roomId';
 
       emit(state.copyWith(
@@ -245,10 +235,6 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     emit(const CreateRoomState());
   }
 
-  /// Validate a shareable URL for cross-device rooms.
-  ///
-  /// Note: Local paths and file:// URLs are intentionally rejected because
-  /// friends joining from web/mobile cannot access host local files.
   bool _validateUrl(String url) {
     if (url.trim().isEmpty) return false;
 
@@ -256,12 +242,10 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     if (uri == null || !uri.hasScheme) return false;
     if (!(uri.scheme == 'http' || uri.scheme == 'https')) return false;
 
-    // Check for YouTube
     if (uri.host.contains('youtube.com') || uri.host.contains('youtu.be')) {
       return true;
     }
 
-    // Check for other video platforms
     final videoHosts = [
       'vimeo.com',
       'dailymotion.com',
@@ -276,7 +260,6 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
       }
     }
 
-    // Allow direct HTTP(S) video files/streams.
     final lowerPath = uri.path.toLowerCase();
     return lowerPath.endsWith('.mp4') ||
         lowerPath.endsWith('.m3u8') ||
@@ -307,12 +290,10 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     return raw;
   }
 
-  /// Get thumbnail URL from video URL
   String? _getThumbnailUrl(String url) {
     final uri = Uri.tryParse(url);
     if (uri == null) return null;
 
-    // YouTube thumbnail
     if (uri.host.contains('youtube.com') || uri.host.contains('youtu.be')) {
       String? videoId;
       if (uri.host.contains('youtu.be')) {
@@ -325,11 +306,9 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
       }
     }
 
-    // For other platforms, return null (would need platform-specific APIs)
     return null;
   }
 
-  /// Generate a random room ID
   String _generateRoomId() {
     final random = DateTime.now().millisecondsSinceEpoch.toString();
     return 'room_${random.substring(random.length - 8)}';

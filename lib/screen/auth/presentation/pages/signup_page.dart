@@ -124,7 +124,6 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                 debugPrint('[SignupPage] Status changed: ${state.status}');
                 if (state.status == SignupStatus.success) {
                   debugPrint('[SignupPage] Success! Navigating to login...');
-                  // Show success message
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Signup successful! Please login to continue.'),
@@ -132,7 +131,6 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                       duration: Duration(seconds: 2),
                     ),
                   );
-                  // Navigate to login after a short delay to show snackbar
                   Future.delayed(const Duration(milliseconds: 500), () {
                     if (context.mounted) {
                       debugPrint('[SignupPage] Executing navigation to /login');
@@ -362,18 +360,10 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                                     state.status == SignupStatus.loading,
                                 onPressed: state.isFormValid
                                     ? () {
-                                        // Debug: Check form validity
-                                        debugPrint('Form valid: ${state.isFormValid}');
-                                        debugPrint('Name: ${state.name}');
-                                        debugPrint('Email valid: ${state.isEmailValid}');
-                                        debugPrint('Password length: ${state.password.length}');
-                                        debugPrint('Passwords match: ${state.doPasswordsMatch}');
-                                        debugPrint('Agreed to terms: ${state.agreedToTerms}');
                                         context.read<SignupBloc>().add(
                                             const SignupButtonPressed());
                                       }
                                     : () {
-                                        // Show why button is disabled
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           SnackBar(
                                             content: Text(
@@ -405,7 +395,6 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                           ),
                           const SizedBox(height: 8),
                           const SizedBox(height: 18),
-                          // Social auth (Google only)
                           SocialAuthButtons(
                             onGooglePressed: () {},
                            

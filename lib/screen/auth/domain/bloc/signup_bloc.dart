@@ -35,8 +35,6 @@ class SignupBloc extends Bloc<SignupEvent, SignupState> {
   );
 
   void _onFieldFocused(SignupEvent event, Emitter<SignupState> emit) {
-    // When a field is focused, clear any previous failure state so the
-    // error message can be reconsidered on the next submit.
     emit(
       state.copyWith(
         status: SignupStatus.initial,
@@ -45,9 +43,7 @@ class SignupBloc extends Bloc<SignupEvent, SignupState> {
     );
   }
 
-  void _onFieldUnfocused(SignupFieldUnfocused event, Emitter<SignupState> emit) {
-    // No-op for now, but keeps BLoC consistent with dispatched events.
-  }
+  void _onFieldUnfocused(SignupFieldUnfocused event, Emitter<SignupState> emit) {}
 
   void _onNameChanged(SignupNameChanged event, Emitter<SignupState> emit) {
     emit(
@@ -156,7 +152,6 @@ class SignupBloc extends Bloc<SignupEvent, SignupState> {
       emit(
         state.copyWith(
           status: SignupStatus.failure,
-          // e is usually an Exception from AuthMethods with a user‑friendly message.
           errorMessage: e.toString().replaceFirst('Exception: ', ''),
         ),
       );

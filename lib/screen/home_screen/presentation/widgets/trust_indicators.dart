@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// Visual trust indicators: platform icons and "How it Works" section.
 class TrustIndicators extends StatelessWidget {
   const TrustIndicators({super.key});
 
@@ -13,7 +12,6 @@ class TrustIndicators extends StatelessWidget {
 
     return Column(
       children: [
-        // Platform icons
         Text(
           'Supported Platforms',
           style: TextStyle(
@@ -30,7 +28,6 @@ class TrustIndicators extends StatelessWidget {
           children: _buildPlatformIcons(context),
         ),
         const SizedBox(height: 40),
-        // How it Works section
         Text(
           'How it Works',
           style: TextStyle(
@@ -65,8 +62,6 @@ class TrustIndicators extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
             onTap: () {
               final name = platform['name'] as String;
-              // For now, all supported platforms lead into the Create Room flow,
-              // with a short hint describing what to do next.
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
@@ -81,7 +76,6 @@ class TrustIndicators extends StatelessWidget {
                   duration: const Duration(seconds: 2),
                 ),
               );
-              // Navigate to the unified Create Room screen.
               context.go('/create-room');
             },
             child: Container(
@@ -103,7 +97,6 @@ class TrustIndicators extends StatelessWidget {
                 height: 100,
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) {
-                  // Fallback to icon if image fails to load
                   return Icon(
                     platform['name'] == 'YouTube'
                         ? Icons.play_circle_outline

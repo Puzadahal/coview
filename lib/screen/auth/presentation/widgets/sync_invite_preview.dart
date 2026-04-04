@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
-/// Sync-Invite Preview: "Join Sarah's Room" with host avatar when arriving via invite link.
 class SyncInvitePreview extends StatelessWidget {
   final String hostName;
   final String? hostAvatarUrl;

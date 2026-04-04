@@ -9,7 +9,6 @@ import '../../domain/bloc/join_room_bloc.dart';
 import '../../domain/bloc/join_room_event.dart';
 import '../../domain/bloc/join_room_state.dart';
 
-/// Join Existing Room screen – user pastes invite link or room code.
 class JoinRoomPage extends StatefulWidget {
   const JoinRoomPage({super.key});
 
@@ -61,7 +60,6 @@ class _JoinRoomPageState extends State<JoinRoomPage> {
         listener: (context, state) async {
           final roomId = state.resolvedRoomId;
           if (roomId != null && roomId.isNotEmpty) {
-            // Save this room in the logged-in user's history.
             final user = fb.FirebaseAuth.instance.currentUser;
             if (user != null) {
               try {

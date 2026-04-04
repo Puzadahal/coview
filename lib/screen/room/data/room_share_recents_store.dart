@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Someone the user saves for quick re-invites from the room share sheet.
 class RoomShareRecipient {
   RoomShareRecipient({
     required this.id,
@@ -13,7 +12,6 @@ class RoomShareRecipient {
 
   final String id;
   final String name;
-  /// Digits only, country code included (e.g. 14155552671) for wa.me links.
   final String? phoneDigits;
   final int lastUsedMs;
 
@@ -36,7 +34,6 @@ class RoomShareRecipient {
   }
 }
 
-/// Persists people shown in the room share sheet (device-local).
 class RoomShareRecentsStore {
   RoomShareRecentsStore._();
   static const _key = 'room_share_recents_v1';

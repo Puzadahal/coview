@@ -46,7 +46,6 @@ class ProfilePage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Profile Header Section
             Center(
               child: Column(
                 children: [
@@ -78,7 +77,6 @@ class ProfilePage extends StatelessWidget {
             ),
             const SizedBox(height: 40),
 
-            // Settings Section
             Text(
               'Settings',
               style: theme.textTheme.titleLarge?.copyWith(
@@ -87,7 +85,6 @@ class ProfilePage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // Theme Settings Card
             Card(
               elevation: 0,
               color: isDark
@@ -153,7 +150,6 @@ class ProfilePage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // Account Settings Card
             Card(
               elevation: 0,
               color: isDark
@@ -231,7 +227,6 @@ class ProfilePage extends StatelessWidget {
             ),
             const SizedBox(height: 40),
 
-            // About Section
             Text(
               'About',
               style: theme.textTheme.titleLarge?.copyWith(
@@ -317,7 +312,6 @@ class ProfilePage extends StatelessWidget {
             ),
             const SizedBox(height: 40),
 
-            // Logout Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(

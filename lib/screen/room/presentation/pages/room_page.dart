@@ -20,7 +20,6 @@ import '../widgets/room_share_sheet.dart';
 import '../widgets/youtube_player_view.dart';
 import '../../domain/room_call_service.dart';
 
-/// Coview Room screen showing synchronized playback UI and real‑time chat.
 class RoomPage extends StatefulWidget {
   final String roomId;
 
@@ -121,13 +120,8 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     );
   }
 
-  /// True once Firestore has delivered a `playback/state` document (version ≥ 1).
-  /// Until then we must not force pause/seek from default bloc state or drift —
-  /// that was stopping playback ~1–2s after the user hit play.
   bool _hasRemotePlaybackState(RoomState state) => state.playbackVersion > 0;
 
-  /// Applies Firestore master playback (seek + play/pause). Uses NTP-aligned
-  /// time so everyone converges on the same instant in the video.
   Future<void> _applyPlaybackFromFirestore(
     RoomState state, {
     bool force = false,
@@ -468,7 +462,6 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
             lower.endsWith('.webm'));
 
     if (!isNetwork && !isLocalFile) {
-      // Not a playable source for the built‑in player.
       if (_videoController != null) {
         _videoController!.dispose();
         _videoController = null;
@@ -519,7 +512,6 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Video surface — YouTube fills the box (no Center) so WebView gets stable size.
           AspectRatio(
             aspectRatio: 16 / 9,
             child: ClipRRect(
@@ -755,7 +747,6 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
             ),
           ),
           const SizedBox(height: AppConstants.spacingMedium),
-          // Playback + call controls row (scroll on narrow screens)
           Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppConstants.spacingSmall,
@@ -1080,9 +1071,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     final uri = Uri.tryParse(url);
     if (uri == null) return true;
     if (uri.scheme == 'file') return true;
-    // e.g. C:\video.mp4
     if (RegExp(r'^[a-zA-Z]:\\').hasMatch(url)) return true;
-    // no scheme -> relative/local
     if (!uri.hasScheme) return true;
     return false;
   }

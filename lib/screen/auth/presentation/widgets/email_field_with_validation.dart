@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/widgets/custom_text_field.dart';
 import '../../../../config/colors/app_colors.dart';
 
-/// Email field with real-time inline validation (green check when valid).
 class EmailFieldWithValidation extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode? focusNode;

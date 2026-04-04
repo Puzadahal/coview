@@ -14,7 +14,6 @@ class RoomCallService {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _candidatesSub;
 
   Future<void> startCall() async {
-    // Basic STUN only; for production you should add TURN.
     final config = {
       'iceServers': [
         {'urls': 'stun:stun.l.google.com:19302'},
@@ -23,14 +22,12 @@ class RoomCallService {
 
     _peerConnection ??= await createPeerConnection(config);
 
-    // Get local media (audio + video)
     _localStream = await navigator.mediaDevices.getUserMedia({
       'audio': true,
       'video': true,
     });
     _localStream?.getTracks().forEach(_peerConnection!.addTrack);
 
-    // Handle ICE candidates from this peer
     _peerConnection!.onIceCandidate = (RTCIceCandidate candidate) {
       _firestore
           .collection('rooms')
@@ -41,7 +38,6 @@ class RoomCallService {
           .add(candidate.toMap());
     };
 
-    // Create and store the offer
     final offer = await _peerConnection!.createOffer();
     await _peerConnection!.setLocalDescription(offer);
 
@@ -56,7 +52,6 @@ class RoomCallService {
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    // Listen for answer and remote ICE
     _firestore
         .collection('rooms')
         .doc(roomId)

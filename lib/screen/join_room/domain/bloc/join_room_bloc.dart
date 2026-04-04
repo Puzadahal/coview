@@ -2,7 +2,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'join_room_event.dart';
 import 'join_room_state.dart';
 
-/// BLoC for the "Join Existing Room" flow.
 class JoinRoomBloc extends Bloc<JoinRoomEvent, JoinRoomState> {
   JoinRoomBloc() : super(const JoinRoomState()) {
     on<JoinRoomInputChanged>(_onInputChanged);

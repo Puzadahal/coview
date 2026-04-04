@@ -1,16 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'room_event.dart';
 import 'room_state.dart';
 
-/// BLoC that manages basic room UI state (chat messages, status).
-///
-/// **Guest chat:** Users with no Firebase user or an anonymous Firebase user
-/// only see messages from the current visit (reopening the room starts fresh).
-/// Signed-in (non-anonymous) users still see full room history.
 class RoomBloc extends Bloc<RoomEvent, RoomState> {
   RoomBloc(String roomId) : super(RoomState.initial(roomId)) {
     _firestore = FirebaseFirestore.instance;
@@ -27,20 +23,17 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _messagesSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _playbackSub;
 
-  /// When non-null, this client is a guest: only show messages at/after this time.
   DateTime? _guestChatSessionStart;
 
   bool _isGuestForChatSession(fb.User? user) =>
       user == null || user.isAnonymous;
 
-  /// Guests (no account or Firebase anonymous) only see chat from this visit.
   List<RoomMessage> _filterMessagesForGuestSession(List<RoomMessage> all) {
     final start = _guestChatSessionStart;
     if (start == null) return all;
     return all.where((m) {
       final t = m.createdAt;
       if (t == null) {
-        // Pending server timestamp — keep so new sends are not dropped.
         return true;
       }
       return !t.isBefore(start);
@@ -71,14 +64,28 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
       final name = data['name'] as String? ?? 'Watch Room';
       final videoUrl = data['videoUrl'] as String?;
 
+      // Firestore rules require request.auth != null for playback/* (see firestore.rules).
+      // "Continue as guest" has no Firebase user until we sign in anonymously.
+      var playbackSyncEnabled = true;
+      if (_auth.currentUser == null) {
+        try {
+          await _auth.signInAnonymously();
+        } on fb.FirebaseAuthException catch (e) {
+          debugPrint(
+            'RoomBloc: anonymous sign-in failed (playback sync disabled): $e',
+          );
+          playbackSyncEnabled = false;
+        }
+      }
+      if (_auth.currentUser == null) {
+        playbackSyncEnabled = false;
+      }
+
       final user = _auth.currentUser;
-      // Slightly earlier cutoff avoids dropping messages when device clock is
-      // ahead of Firestore server time.
       _guestChatSessionStart = _isGuestForChatSession(user)
           ? DateTime.now().subtract(const Duration(seconds: 30))
           : null;
 
-      // Start listening to room messages in Firestore
       _messagesSub?.cancel();
       _messagesSub = _firestore
           .collection('rooms')
@@ -103,32 +110,39 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
         add(
           RoomMessagesUpdated(_filterMessagesForGuestSession(messages)),
         );
+      }, onError: (Object e, StackTrace st) {
+        debugPrint('RoomBloc: messages subscription error: $e\n$st');
       });
 
       _playbackSub?.cancel();
-      _playbackSub = _firestore
-          .collection('rooms')
-          .doc(state.roomId)
-          .collection('playback')
-          .doc('state')
-          .snapshots()
-          .listen((snap) {
-        final data = snap.data();
-        if (data == null) return;
-        final updatedAt = data['updatedAt'];
-        int anchorMs = 0;
-        if (updatedAt is Timestamp) {
-          anchorMs = updatedAt.millisecondsSinceEpoch;
-        }
-        add(
-          RoomPlaybackUpdated(
-            isPlaying: (data['isPlaying'] as bool?) ?? false,
-            positionSeconds: (data['positionSeconds'] as num?)?.toDouble() ?? 0,
-            anchorServerTimeMs: anchorMs,
-            version: (data['version'] as num?)?.toInt() ?? 0,
-          ),
-        );
-      });
+      if (playbackSyncEnabled) {
+        _playbackSub = _firestore
+            .collection('rooms')
+            .doc(state.roomId)
+            .collection('playback')
+            .doc('state')
+            .snapshots()
+            .listen((snap) {
+          final snapData = snap.data();
+          if (snapData == null) return;
+          final updatedAt = snapData['updatedAt'];
+          int anchorMs = 0;
+          if (updatedAt is Timestamp) {
+            anchorMs = updatedAt.millisecondsSinceEpoch;
+          }
+          add(
+            RoomPlaybackUpdated(
+              isPlaying: (snapData['isPlaying'] as bool?) ?? false,
+              positionSeconds:
+                  (snapData['positionSeconds'] as num?)?.toDouble() ?? 0,
+              anchorServerTimeMs: anchorMs,
+              version: (snapData['version'] as num?)?.toInt() ?? 0,
+            ),
+          );
+        }, onError: (Object e, StackTrace st) {
+          debugPrint('RoomBloc: playback subscription error: $e\n$st');
+        });
+      }
 
       emit(
         state.copyWith(
@@ -183,18 +197,26 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
     RoomPlaybackSetRequested event,
     Emitter<RoomState> emit,
   ) async {
-    await _firestore
-        .collection('rooms')
-        .doc(state.roomId)
-        .collection('playback')
-        .doc('state')
-        .set({
-      'isPlaying': event.isPlaying,
-      'positionSeconds': event.positionSeconds,
-      'updatedAt': FieldValue.serverTimestamp(),
-      'actorId': _auth.currentUser?.uid,
-      'version': FieldValue.increment(1),
-    }, SetOptions(merge: true));
+    if (_auth.currentUser == null) {
+      debugPrint('RoomBloc: skip playback write (no Firebase user)');
+      return;
+    }
+    try {
+      await _firestore
+          .collection('rooms')
+          .doc(state.roomId)
+          .collection('playback')
+          .doc('state')
+          .set({
+        'isPlaying': event.isPlaying,
+        'positionSeconds': event.positionSeconds,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'actorId': _auth.currentUser?.uid,
+        'version': FieldValue.increment(1),
+      }, SetOptions(merge: true));
+    } on FirebaseException catch (e) {
+      debugPrint('RoomBloc: playback write failed: ${e.code} ${e.message}');
+    }
   }
 
   void _onPlaybackUpdated(

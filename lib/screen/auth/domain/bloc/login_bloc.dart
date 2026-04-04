@@ -34,7 +34,6 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
   static const _prefsLoggedInKey = 'logged_in';
 
   void _onFieldFocused(LoginEvent event, Emitter<LoginState> emit) {
-    // Clear previous error when the user focuses a field.
     emit(
       state.copyWith(
         status: LoginStatus.initial,
@@ -43,9 +42,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     );
   }
 
-  void _onFieldUnfocused(FieldUnfocused event, Emitter<LoginState> emit) {
-    // No-op for now; handler exists so add(...) is always valid.
-  }
+  void _onFieldUnfocused(FieldUnfocused event, Emitter<LoginState> emit) {}
 
   Future<void> _onInitialized(
     LoginInitialized event,
@@ -63,9 +60,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
           rememberMe: remember,
         ),
       );
-    } catch (_) {
-      // Ignore local storage errors
-    }
+    } catch (_) {}
   }
 
   void _onEmailChanged(EmailChanged event, Emitter<LoginState> emit) {
@@ -120,7 +115,6 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
         password: state.password,
       );
 
-      // Persist email if rememberMe is enabled.
       await _persistRememberMe(state.rememberMe, state.email);
       await _persistLoggedIn(true);
 
@@ -148,15 +142,12 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     emit(state.copyWith(status: LoginStatus.loading));
     
     try {
-      // Generate unique guest session ID
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final random = Random().nextInt(10000);
       final guestId = 'guest_${timestamp}_$random';
-      
-      // Create guest user
+
       final guestUser = User.guest(guestId);
-      
-      // Small delay for UX
+
       await Future<void>.delayed(const Duration(milliseconds: 500));
       
       emit(state.copyWith(
@@ -216,18 +207,14 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       } else {
         await prefs.remove(_prefsEmailKey);
       }
-    } catch (_) {
-      // Ignore persistence errors
-    }
+    } catch (_) {}
   }
 
   Future<void> _persistLoggedIn(bool value) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_prefsLoggedInKey, value);
-    } catch (_) {
-      // Ignore persistence errors
-    }
+    } catch (_) {}
   }
 }
 

@@ -6,7 +6,6 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/utils/invite_link.dart';
 import '../../../../core/widgets/glass_form_card.dart';
 
-/// Success Dialog shown after room creation with copyable invite link
 class CreateRoomSuccessDialog extends StatelessWidget {
   final String roomName;
   final String inviteLink;
@@ -36,7 +35,6 @@ class CreateRoomSuccessDialog extends StatelessWidget {
       child: GlassFormCard(
         padding: const EdgeInsets.all(AppConstants.spacingXLarge),
         children: [
-          // Success Icon
           Container(
             width: 80,
             height: 80,
@@ -57,7 +55,6 @@ class CreateRoomSuccessDialog extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // Success Message
           Text(
             'Room Created!',
             style: theme.textTheme.headlineSmall?.copyWith(
@@ -78,7 +75,6 @@ class CreateRoomSuccessDialog extends StatelessWidget {
           ),
           const SizedBox(height: 32),
 
-          // Invite Link Section
           Text(
             isRoomCodeOnly
                 ? 'Share this room code (friends paste it in Join Room):'
@@ -93,7 +89,6 @@ class CreateRoomSuccessDialog extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // Copyable Invite Link
           GestureDetector(
             onTap: () {
               Clipboard.setData(ClipboardData(text: resolvedLink));
@@ -147,14 +142,13 @@ class CreateRoomSuccessDialog extends StatelessWidget {
           ),
           const SizedBox(height: 32),
 
-          // Action Buttons
           Row(
             children: [
               Expanded(
                 child: OutlinedButton(
                   onPressed: () {
                     context.pop();
-                    context.pop(); // Close dialog and go back
+                    context.pop();
                   },
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -177,9 +171,8 @@ class CreateRoomSuccessDialog extends StatelessWidget {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
-                    context.pop(); // close dialog
+                    context.pop();
                     if (roomId.isNotEmpty) {
-                      // Navigate into the Coview room
                       context.go('/join/$roomId');
                     }
                   },
