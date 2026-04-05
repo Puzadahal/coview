@@ -52,7 +52,8 @@ dependencies:
   youtube_player_iframe: ^5.2.2
   ntp: ^2.0.0
   share_plus: ^12.0.2
-  flutter_translate: ^4.1.0
+  flutter_translate:
+    path: packages/flutter_translate
 
 dev_dependencies:
   flutter_test:

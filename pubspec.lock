@@ -363,10 +363,9 @@ packages:
   flutter_translate:
     dependency: "direct main"
     description:
-      name: flutter_translate
-      sha256: bc09db690098879e3f90eb3aac3499e5282f32d5f9d8f1cc597d67bbc1e065ef
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/flutter_translate"
+      relative: true
+    source: path
     version: "4.1.0"
   flutter_web_plugins:
     dependency: transitive
