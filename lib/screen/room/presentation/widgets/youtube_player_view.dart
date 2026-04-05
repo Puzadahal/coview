@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart' as ypf;
 import 'package:youtube_player_iframe/youtube_player_iframe.dart' as ypi;
 import 'package:url_launcher/url_launcher.dart';
@@ -126,6 +127,27 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
     return pos.inMilliseconds / 1000.0;
   }
 
+  /// True while the native player is in fullscreen (user tapped fullscreen).
+  bool get isYoutubeFullscreen =>
+      !kIsWeb && (_mobileController?.value.isFullScreen ?? false);
+
+  /// Leave fullscreen and restore normal orientations without leaving the room.
+  Future<void> exitYoutubeFullscreen() async {
+    if (kIsWeb) return;
+    final c = _mobileController;
+    if (c == null) return;
+    if (c.value.isFullScreen) {
+      c.toggleFullScreenMode();
+    }
+    await SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  }
+
   Future<void> _openInYouTube() async {
     final id = _videoId;
     if (id.isEmpty) return;
@@ -245,27 +267,38 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
 
     final c = _mobileController;
     if (c == null) return const SizedBox.shrink();
+    // Do not use [YoutubePlayerBuilder]: it forces full window height in
+    // landscape and toggles "fullscreen" on rotation, which overflows inside
+    // the room card and makes the app bar back button leave the room.
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: ypf.YoutubePlayerBuilder(
-        player: ypf.YoutubePlayer(
-          controller: c,
-          aspectRatio: 16 / 9,
-          showVideoProgressIndicator: true,
-          progressIndicatorColor: AppColors.secondary,
-          progressColors: ypf.ProgressBarColors(
-            playedColor: AppColors.secondary,
-            handleColor: AppColors.primaryAccent,
-          ),
-        ),
-        builder: (context, player) => ValueListenableBuilder<ypf.YoutubePlayerValue>(
-          valueListenable: c,
-          builder: (context, value, _) {
-            return Stack(
+      child: ValueListenableBuilder<ypf.YoutubePlayerValue>(
+        valueListenable: c,
+        builder: (context, value, _) {
+          return PopScope(
+            canPop: !value.isFullScreen,
+            onPopInvokedWithResult: (didPop, _) {
+              if (didPop) return;
+              if (c.value.isFullScreen) {
+                c.toggleFullScreenMode();
+              }
+            },
+            child: Stack(
               fit: StackFit.expand,
               alignment: Alignment.center,
               children: [
-                player,
+                Positioned.fill(
+                  child: ypf.YoutubePlayer(
+                    controller: c,
+                    aspectRatio: 16 / 9,
+                    showVideoProgressIndicator: true,
+                    progressIndicatorColor: AppColors.secondary,
+                    progressColors: ypf.ProgressBarColors(
+                      playedColor: AppColors.secondary,
+                      handleColor: AppColors.primaryAccent,
+                    ),
+                  ),
+                ),
                 if (value.hasError)
                   ColoredBox(
                     color: Colors.black.withValues(alpha: 0.82),
@@ -323,9 +356,9 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
                     ),
                   ),
               ],
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }

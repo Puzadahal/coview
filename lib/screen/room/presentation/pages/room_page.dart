@@ -122,6 +122,18 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
 
   bool _hasRemotePlaybackState(RoomState state) => state.playbackVersion > 0;
 
+  /// When [playbackAnchorServerTimeMs] is 0 (e.g. `updatedAt` not resolved yet) or
+  /// this device's clock (with NTP offset) is **behind** the server anchor,
+  /// [PlaybackSyncMath.expectedPositionSeconds] stays frozen at
+  /// [RoomState.playbackPositionSeconds] while the player keeps moving. Drift
+  /// correction then sees a large gap and seeks backward — on a phone this
+  /// often looks like the video only plays for ~1 second.
+  bool _playbackAnchorCoherentForDrift(RoomState state) {
+    final anchor = state.playbackAnchorServerTimeMs;
+    if (anchor <= 0) return false;
+    return NtpClock.instance.nowMs >= anchor;
+  }
+
   Future<void> _applyPlaybackFromFirestore(
     RoomState state, {
     bool force = false,
@@ -202,7 +214,8 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       if (state.isPlaying != playing) {
         await _setPlaying(state, state.isPlaying);
       }
-      if ((expected - local).abs() > 0.5) {
+      if (_playbackAnchorCoherentForDrift(state) &&
+          (expected - local).abs() > 0.5) {
         await _youtubeKey.currentState?.seekToSeconds(expected);
       }
       return;
@@ -213,6 +226,10 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
 
     if (state.isPlaying != vc.value.isPlaying) {
       await _setPlaying(state, state.isPlaying);
+    }
+
+    if (!_playbackAnchorCoherentForDrift(state)) {
+      return;
     }
 
     final decision = PlaybackSyncMath.driftDecision(
@@ -261,6 +278,23 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _handleRoomBack(BuildContext context) async {
+    final videoUrl = context.read<RoomBloc>().state.videoUrl ?? '';
+    if (_isYouTubeUrl(videoUrl)) {
+      final yt = _youtubeKey.currentState;
+      if (yt != null && yt.isYoutubeFullscreen) {
+        await yt.exitYoutubeFullscreen();
+        return;
+      }
+    }
+    if (!context.mounted) return;
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/home');
+    }
+  }
+
   Future<void> _togglePlayback(RoomState state) async {
     final currentlyPlaying = _isYouTubeUrl(state.videoUrl ?? '')
         ? (await _youtubeKey.currentState?.isPlaying() ?? false)
@@ -296,13 +330,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              context.pop();
-            } else {
-              context.go('/home');
-            }
-          },
+          onPressed: () => unawaited(_handleRoomBack(context)),
         ),
         title: BlocBuilder<RoomBloc, RoomState>(
           builder: (context, state) {
@@ -405,9 +433,15 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                         )
                       : Column(
                           children: [
-                            _buildVideoPane(theme, isDark, state),
+                            Expanded(
+                              flex: 5,
+                              child: _buildVideoPane(theme, isDark, state),
+                            ),
                             const SizedBox(height: AppConstants.spacingMedium),
-                            Expanded(child: _buildChatPane(theme, isDark)),
+                            Expanded(
+                              flex: 3,
+                              child: _buildChatPane(theme, isDark),
+                            ),
                           ],
                         );
                 },
@@ -497,8 +531,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AspectRatio(
-            aspectRatio: 16 / 9,
+          Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(
                 AppConstants.borderRadiusLarge,
