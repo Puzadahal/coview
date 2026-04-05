@@ -5,10 +5,7 @@ import '../../../../core/constants/app_constants.dart';
 class RoomPreviewCard extends StatelessWidget {
   final String thumbnailUrl;
 
-  const RoomPreviewCard({
-    super.key,
-    required this.thumbnailUrl,
-  });
+  const RoomPreviewCard({super.key, required this.thumbnailUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +47,7 @@ class RoomPreviewCard extends StatelessWidget {
                     child: CircularProgressIndicator(
                       value: loadingProgress.expectedTotalBytes != null
                           ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
+                                loadingProgress.expectedTotalBytes!
                           : null,
                       color: AppColors.secondary,
                     ),

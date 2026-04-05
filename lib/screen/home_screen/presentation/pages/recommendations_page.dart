@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_translate/flutter_translate.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../config/colors/app_colors.dart';
-import '../../../../core/language/app_texts.dart';
-import '../../../../core/language/domain/bloc/app_language_cubit.dart';
 
 class RecommendationsPage extends StatelessWidget {
   const RecommendationsPage({super.key});
@@ -19,14 +17,12 @@ class RecommendationsPage extends StatelessWidget {
       ('The Gentlemen', 'Crime comedy series'),
     ];
 
-    return BlocBuilder<AppLanguageCubit, String>(
-      builder: (context, lang) {
-        return Scaffold(
+    return Scaffold(
       backgroundColor: AppColors.primaryDark,
       appBar: AppBar(
         backgroundColor: AppColors.primaryDark,
         foregroundColor: Colors.white,
-        title: Text(AppTexts.tr(lang, 'recommendationsPageTitle')),
+        title: Text(translate('recommendationsPageTitle')),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/home'),
@@ -53,7 +49,7 @@ class RecommendationsPage extends StatelessWidget {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        AppTexts.tr(lang, 'recommendationsPageHeading'),
+                        translate('recommendationsPageHeading'),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 36,
@@ -63,7 +59,7 @@ class RecommendationsPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      AppTexts.tr(lang, 'recommendationsPageSub'),
+                      translate('recommendationsPageSub'),
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.78),
                         fontSize: 16,
@@ -120,19 +116,22 @@ class RecommendationsPage extends StatelessWidget {
                                     Text(
                                       pick.$2,
                                       style: TextStyle(
-                                        color: Colors.white.withValues(alpha: 0.78),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.78,
+                                        ),
                                         fontSize: 14,
                                       ),
                                     ),
                                     const SizedBox(height: 12),
                                     ElevatedButton(
-                                      onPressed: () => context.go('/create-room'),
+                                      onPressed: () =>
+                                          context.go('/create-room'),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: AppColors.secondary,
                                         foregroundColor: AppColors.textDark,
                                       ),
                                       child: Text(
-                                        AppTexts.tr(lang, 'watchWithFriends'),
+                                        translate('watchWithFriends'),
                                       ),
                                     ),
                                   ],
@@ -150,8 +149,5 @@ class RecommendationsPage extends StatelessWidget {
         ),
       ),
     );
-      },
-    );
   }
 }
-

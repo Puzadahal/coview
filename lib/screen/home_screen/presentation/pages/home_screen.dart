@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_translate/flutter_translate.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../config/colors/app_colors.dart';
-import '../../../../core/language/app_texts.dart';
-import '../../../../core/language/domain/bloc/app_language_cubit.dart';
 import '../../domain/bloc/home_bloc.dart';
 import '../../domain/bloc/home_event.dart';
 import '../../domain/bloc/home_state.dart';
@@ -21,74 +20,65 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class _HomeScreenContent extends StatefulWidget {
+class _HomeScreenContent extends StatelessWidget {
   const _HomeScreenContent();
-
-  @override
-  State<_HomeScreenContent> createState() => _HomeScreenContentState();
-}
-
-class _HomeScreenContentState extends State<_HomeScreenContent> {
-  String tr(String lang, String key) => AppTexts.tr(lang, key);
 
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final isDesktop = width >= 900;
     final useCompactNav = width < 820;
-    return BlocBuilder<AppLanguageCubit, String>(
-      builder: (context, selectedLanguage) {
-        return Scaffold(
-          backgroundColor: AppColors.primaryDark,
-          drawer: useCompactNav
-              ? _HomeDrawer(
-                  selectedLanguage: selectedLanguage,
-                  tr: tr,
-                  onLanguageChanged: (code) =>
-                      context.read<AppLanguageCubit>().setLanguage(code),
-                )
-              : null,
-          appBar: AppBar(
-            backgroundColor: AppColors.primaryDark,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            titleSpacing: useCompactNav ? 8 : 16,
-            title: useCompactNav
-                ? const Text('SyncView', style: TextStyle(fontWeight: FontWeight.w800))
-                : Row(
-                    children: [
-                      const Text('SyncView', style: TextStyle(fontWeight: FontWeight.w800)),
-                      const SizedBox(width: 16),
-                      _NavLink(
-                        label: tr(selectedLanguage, 'home'),
-                        onTap: () => context.go('/home'),
-                      ),
-                      _NavLink(
-                        label: tr(selectedLanguage, 'about'),
-                        onTap: () => context.go('/about'),
-                      ),
-                      _LanguageMenu(
-                        label: tr(selectedLanguage, 'language'),
-                        current: selectedLanguage,
-                        onChanged: (value) =>
-                            context.read<AppLanguageCubit>().setLanguage(value),
-                      ),
-                      _NavLink(
-                        label: tr(selectedLanguage, 'recommendations'),
-                        onTap: () => context.go('/recommendations'),
-                      ),
-                    ],
+    final langCode =
+        LocalizedApp.of(context).delegate.currentLocale.languageCode;
+
+    return Scaffold(
+      backgroundColor: AppColors.primaryDark,
+      drawer: useCompactNav
+          ? _HomeDrawer(
+              selectedLanguage: langCode,
+              onLanguageChanged: (code) => changeLocale(context, code),
+            )
+          : null,
+      appBar: AppBar(
+        backgroundColor: AppColors.primaryDark,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        titleSpacing: useCompactNav ? 8 : 16,
+        title: useCompactNav
+            ? const Text('SyncView', style: TextStyle(fontWeight: FontWeight.w800))
+            : Row(
+                children: [
+                  const Text('SyncView', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const SizedBox(width: 16),
+                  _NavLink(
+                    label: translate('home'),
+                    onTap: () => context.go('/home'),
                   ),
-            actions: [
-              IconButton(
-                tooltip: 'Profile',
-                icon: const Icon(Icons.person_outline),
-                onPressed: () => context.go('/profile'),
+                  _NavLink(
+                    label: translate('about'),
+                    onTap: () => context.go('/about'),
+                  ),
+                  _LanguageMenu(
+                    label: translate('language'),
+                    current: langCode,
+                    onChanged: (value) => changeLocale(context, value),
+                  ),
+                  _NavLink(
+                    label: translate('recommendations'),
+                    onTap: () => context.go('/recommendations'),
+                  ),
+                ],
               ),
-              const SizedBox(width: 4),
-            ],
+        actions: [
+          IconButton(
+            tooltip: translate('profile'),
+            icon: const Icon(Icons.person_outline),
+            onPressed: () => context.go('/profile'),
           ),
-          body: BlocBuilder<HomeBloc, HomeState>(
+          const SizedBox(width: 4),
+        ],
+      ),
+      body: BlocBuilder<HomeBloc, HomeState>(
         builder: (context, state) {
           return Container(
             decoration: const BoxDecoration(
@@ -108,24 +98,24 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
                     children: [
                       _HeroSection(
                         isDesktop: isDesktop,
-                        title: tr(selectedLanguage, 'heroTitle'),
-                        subtitle: tr(selectedLanguage, 'heroSubtitle'),
-                        primaryCta: tr(selectedLanguage, 'startWatching'),
-                        secondaryCta: tr(selectedLanguage, 'joinExisting'),
+                        title: translate('heroTitle'),
+                        subtitle: translate('heroSubtitle'),
+                        primaryCta: translate('startWatching'),
+                        secondaryCta: translate('joinExisting'),
                       ),
                       const SizedBox(height: 28),
-                      _SimpleHeader(title: tr(selectedLanguage, 'howItWorks')),
+                      _SimpleHeader(title: translate('howItWorks')),
                       const SizedBox(height: 14),
                       const _HowCards(),
                       const SizedBox(height: 28),
-                      _SimpleHeader(title: tr(selectedLanguage, 'aboutTitle')),
+                      _SimpleHeader(title: translate('aboutTitle')),
                       const SizedBox(height: 12),
-                      _TextCard(text: tr(selectedLanguage, 'aboutDesc')),
+                      _TextCard(text: translate('aboutDesc')),
                       const SizedBox(height: 28),
-                      _SimpleHeader(title: tr(selectedLanguage, 'trending')),
+                      _SimpleHeader(title: translate('trending')),
                       const SizedBox(height: 4),
                       Text(
-                        tr(selectedLanguage, 'trendingSub'),
+                        translate('trendingSub'),
                         style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
                       ),
                       const SizedBox(height: 12),
@@ -133,7 +123,7 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
                       const SizedBox(height: 28),
                       const PreviousRoomsSection(),
                       const SizedBox(height: 20),
-                      _Footer(tagline: tr(selectedLanguage, 'footer')),
+                      _Footer(tagline: translate('footer')),
                     ],
                   ),
                 ),
@@ -142,20 +132,16 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
           );
         },
       ),
-        );
-      },
     );
   }
 }
 
 class _HomeDrawer extends StatelessWidget {
   final String selectedLanguage;
-  final String Function(String lang, String key) tr;
-  final ValueChanged<String> onLanguageChanged;
+  final Future<void> Function(String code) onLanguageChanged;
 
   const _HomeDrawer({
     required this.selectedLanguage,
-    required this.tr,
     required this.onLanguageChanged,
   });
 
@@ -188,24 +174,24 @@ class _HomeDrawer extends StatelessWidget {
             const Divider(height: 1, color: Color(0x33FFFFFF)),
             ListTile(
               leading: const Icon(Icons.home_outlined, color: Colors.white),
-              title: Text(tr(selectedLanguage, 'home'), style: const TextStyle(color: Colors.white)),
+              title: Text(translate('home'), style: const TextStyle(color: Colors.white)),
               onTap: () => closeThen(() => context.go('/home')),
             ),
             ListTile(
               leading: const Icon(Icons.info_outline, color: Colors.white),
-              title: Text(tr(selectedLanguage, 'about'), style: const TextStyle(color: Colors.white)),
+              title: Text(translate('about'), style: const TextStyle(color: Colors.white)),
               onTap: () => closeThen(() => context.go('/about')),
             ),
             ListTile(
               leading: const Icon(Icons.recommend_outlined, color: Colors.white),
-              title: Text(tr(selectedLanguage, 'recommendations'), style: const TextStyle(color: Colors.white)),
+              title: Text(translate('recommendations'), style: const TextStyle(color: Colors.white)),
               onTap: () => closeThen(() => context.go('/recommendations')),
             ),
             const Divider(height: 1, color: Color(0x33FFFFFF)),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: Text(
-                tr(selectedLanguage, 'language'),
+                translate('language'),
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.65),
                   fontSize: 12,
@@ -217,10 +203,10 @@ class _HomeDrawer extends StatelessWidget {
               (e) => RadioListTile<String>(
                 value: e.key,
                 groupValue: selectedLanguage,
-                onChanged: (v) {
+                onChanged: (v) async {
                   if (v != null) {
                     Navigator.of(context).pop();
-                    onLanguageChanged(v);
+                    await onLanguageChanged(v);
                   }
                 },
                 activeColor: AppColors.secondary,
@@ -230,7 +216,7 @@ class _HomeDrawer extends StatelessWidget {
             const Divider(height: 1, color: Color(0x33FFFFFF)),
             ListTile(
               leading: const Icon(Icons.person_outline, color: Colors.white),
-              title: Text('Profile', style: const TextStyle(color: Colors.white)),
+              title: Text(translate('profile'), style: const TextStyle(color: Colors.white)),
               onTap: () => closeThen(() => context.go('/profile')),
             ),
           ],
@@ -265,7 +251,7 @@ class _NavLink extends StatelessWidget {
 class _LanguageMenu extends StatelessWidget {
   final String label;
   final String current;
-  final ValueChanged<String> onChanged;
+  final Future<void> Function(String value) onChanged;
   const _LanguageMenu({
     required this.label,
     required this.current,
@@ -276,7 +262,7 @@ class _LanguageMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     const langs = {'en': 'English', 'ne': 'Nepali', 'hi': 'Hindi'};
     return PopupMenuButton<String>(
-      onSelected: onChanged,
+      onSelected: (v) => onChanged(v),
       itemBuilder: (_) => langs.entries
           .map((e) => PopupMenuItem(value: e.key, child: Text(e.value)))
           .toList(),
@@ -284,7 +270,7 @@ class _LanguageMenu extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(
           children: [
-            Text('$label: ${langs[current]}', style: const TextStyle(color: Colors.white)),
+            Text('$label: ${langs[current] ?? langs['en']}', style: const TextStyle(color: Colors.white)),
             const Icon(Icons.arrow_drop_down, color: Colors.white),
           ],
         ),
@@ -419,10 +405,10 @@ class _HowCards extends StatelessWidget {
   const _HowCards();
   @override
   Widget build(BuildContext context) {
-    final cards = const [
-      ('1', 'Create a room', 'Start a watch party in one click.'),
-      ('2', 'Share invite link', 'Friends join instantly from browser.'),
-      ('3', 'Stream + chat live', 'Watch together and talk in real time.'),
+    final cards = [
+      ('1', translate('how1_title'), translate('how1_body')),
+      ('2', translate('how2_title'), translate('how2_body')),
+      ('3', translate('how3_title'), translate('how3_body')),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {

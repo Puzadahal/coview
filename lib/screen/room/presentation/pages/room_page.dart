@@ -161,22 +161,19 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     await _seekLocalTo(state, clamped);
     if (!mounted) return;
     context.read<RoomBloc>().add(
-          RoomPlaybackSetRequested(
-            isPlaying: state.isPlaying,
-            positionSeconds: clamped,
-          ),
-        );
+      RoomPlaybackSetRequested(
+        isPlaying: state.isPlaying,
+        positionSeconds: clamped,
+      ),
+    );
   }
 
   Future<void> _seekRoomToStart(RoomState state) async {
     await _seekLocalTo(state, 0);
     if (!mounted) return;
     context.read<RoomBloc>().add(
-          RoomPlaybackSetRequested(
-            isPlaying: state.isPlaying,
-            positionSeconds: 0,
-          ),
-        );
+      RoomPlaybackSetRequested(isPlaying: state.isPlaying, positionSeconds: 0),
+    );
   }
 
   void _schedulePlaybackSpeedReset(VideoPlayerController vc) {
@@ -227,9 +224,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
         break;
       case DriftKind.hardSeek:
         final to = decision.seekToSeconds ?? expected;
-        await vc.seekTo(
-          Duration(milliseconds: (to * 1000).round()),
-        );
+        await vc.seekTo(Duration(milliseconds: (to * 1000).round()));
         _schedulePlaybackSpeedReset(vc);
         break;
       case DriftKind.softRate:
@@ -291,11 +286,13 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     final isWide = size.width > 900;
 
     return Scaffold(
-      backgroundColor:
-          isDark ? AppColors.primaryDark : AppColors.backgroundWhite,
+      backgroundColor: isDark
+          ? AppColors.primaryDark
+          : AppColors.backgroundWhite,
       appBar: AppBar(
-        backgroundColor:
-            isDark ? AppColors.primaryDarkVariant : AppColors.backgroundWhite,
+        backgroundColor: isDark
+            ? AppColors.primaryDarkVariant
+            : AppColors.backgroundWhite,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -323,8 +320,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color:
-                        theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                   ),
                 ),
               ],
@@ -351,10 +347,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                     Color(0xFF16213E),
                     Color(0xFF0F3460),
                   ]
-                : const [
-                    Color(0xFFE6E9FF),
-                    Color(0xFFF5F7FF),
-                  ],
+                : const [Color(0xFFE6E9FF), Color(0xFFF5F7FF)],
           ),
         ),
         child: SafeArea(
@@ -367,7 +360,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
               listener: (context, state) {
                 final cameFromLoading =
                     _listenerPrevStatus == RoomStatus.loading &&
-                        state.status == RoomStatus.viewing;
+                    state.status == RoomStatus.viewing;
                 _listenerPrevStatus = state.status;
                 final versionBump =
                     state.playbackVersion != _lastPlaybackVersionApplied;
@@ -377,52 +370,46 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
               },
               child: BlocBuilder<RoomBloc, RoomState>(
                 builder: (context, state) {
-                _setupVideoController(state.videoUrl);
+                  _setupVideoController(state.videoUrl);
 
-                if (state.status == RoomStatus.loading) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                  if (state.status == RoomStatus.loading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-                if (state.status == RoomStatus.error) {
-                  return Center(
-                    child: Text(
-                      state.error ?? 'Failed to load room.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.error,
-                        fontWeight: FontWeight.w600,
+                  if (state.status == RoomStatus.error) {
+                    return Center(
+                      child: Text(
+                        state.error ?? 'Failed to load room.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: AppColors.error,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                  );
-                }
+                    );
+                  }
 
-                return isWide
-                    ? Row(
-                        children: [
-                          Expanded(
-                            flex: 5,
-                            child: _buildVideoPane(
-                              theme,
-                              isDark,
-                              state,
+                  return isWide
+                      ? Row(
+                          children: [
+                            Expanded(
+                              flex: 5,
+                              child: _buildVideoPane(theme, isDark, state),
                             ),
-                          ),
-                          const SizedBox(width: AppConstants.spacingMedium),
-                          Expanded(
-                            flex: 2,
-                            child: _buildChatPane(theme, isDark),
-                          ),
-                        ],
-                      )
-                    : Column(
-                        children: [
-                          _buildVideoPane(theme, isDark, state),
-                          const SizedBox(height: AppConstants.spacingMedium),
-                          Expanded(
-                            child: _buildChatPane(theme, isDark),
-                          ),
-                        ],
-                      );
+                            const SizedBox(width: AppConstants.spacingMedium),
+                            Expanded(
+                              flex: 2,
+                              child: _buildChatPane(theme, isDark),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            _buildVideoPane(theme, isDark, state),
+                            const SizedBox(height: AppConstants.spacingMedium),
+                            Expanded(child: _buildChatPane(theme, isDark)),
+                          ],
+                        );
                 },
               ),
             ),
@@ -449,10 +436,12 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
 
     final uri = Uri.tryParse(url);
     final lower = url.toLowerCase();
-    final isNetwork = uri != null &&
+    final isNetwork =
+        uri != null &&
         (uri.scheme == 'http' || uri.scheme == 'https') &&
         (uri.path.endsWith('.mp4') || uri.path.endsWith('.m3u8'));
-    final isLocalFile = !isNetwork &&
+    final isLocalFile =
+        !isNetwork &&
         (lower.endsWith('.mp4') ||
             lower.endsWith('.mkv') ||
             lower.endsWith('.mov') ||
@@ -488,11 +477,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     });
   }
 
-  Widget _buildVideoPane(
-    ThemeData theme,
-    bool isDark,
-    RoomState state,
-  ) {
+  Widget _buildVideoPane(ThemeData theme, bool isDark, RoomState state) {
     final videoUrl = state.videoUrl?.trim() ?? '';
     final isLikelyLocalSource =
         videoUrl.isNotEmpty && _isLikelyLocalPath(videoUrl);
@@ -523,10 +508,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                       width: double.infinity,
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [
-                            Color(0xFF6C5CE7),
-                            Color(0xFF00D9FF),
-                          ],
+                          colors: [Color(0xFF6C5CE7), Color(0xFF00D9FF)],
                         ),
                       ),
                       child: Center(
@@ -536,8 +518,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                             Icon(
                               Icons.play_circle_fill,
                               size: 72,
-                              color: AppColors.textWhite
-                                  .withValues(alpha: 0.95),
+                              color: AppColors.textWhite.withValues(
+                                alpha: 0.95,
+                              ),
                             ),
                             const SizedBox(height: 12),
                             Text(
@@ -553,197 +536,192 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                       ),
                     )
                   : isLikelyLocalSource
-                      ? Container(
-                          width: double.infinity,
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Color(0xFF6C5CE7),
-                                Color(0xFF00D9FF),
-                              ],
-                            ),
+                  ? Container(
+                      width: double.infinity,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF6C5CE7), Color(0xFF00D9FF)],
+                        ),
+                      ),
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.link_off,
+                                size: 56,
+                                color: AppColors.textWhite,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                kIsWeb
+                                    ? 'This room uses a local file path. Web cannot access files from another device.'
+                                    : 'This room uses a host local file path. Your device cannot access it.',
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: AppColors.textWhite,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Ask the host to recreate the room with a public HTTP(S) video URL.',
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: AppColors.textWhite.withValues(
+                                    alpha: 0.9,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          child: Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
+                        ),
+                      ),
+                    )
+                  : _isYouTubeUrl(state.videoUrl!)
+                  ? YoutubePlayerView(
+                      key: _youtubeKey,
+                      videoUrl: state.videoUrl!,
+                    )
+                  : Container(
+                      width: double.infinity,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF6C5CE7), Color(0xFF00D9FF)],
+                        ),
+                      ),
+                      child: Center(
+                        child:
+                            (_videoController != null &&
+                                _initializeVideoFuture != null)
+                            ? FutureBuilder<void>(
+                                future: _initializeVideoFuture,
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState !=
+                                      ConnectionState.done) {
+                                    return const CircularProgressIndicator(
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        AppColors.textWhite,
+                                      ),
+                                    );
+                                  }
+                                  return Stack(
+                                    alignment: Alignment.bottomCenter,
+                                    children: [
+                                      AspectRatio(
+                                        aspectRatio:
+                                            _videoController!.value.aspectRatio,
+                                        child: VideoPlayer(_videoController!),
+                                      ),
+                                      IconButton(
+                                        iconSize: 40,
+                                        color: AppColors.textWhite,
+                                        icon: Icon(
+                                          _videoController!.value.isPlaying
+                                              ? Icons.pause_circle_filled
+                                              : Icons.play_circle_fill,
+                                        ),
+                                        onPressed: () {
+                                          final rs = context
+                                              .read<RoomBloc>()
+                                              .state;
+                                          unawaited(_togglePlayback(rs));
+                                        },
+                                      ),
+                                    ],
+                                  );
+                                },
+                              )
+                            : Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(
-                                    Icons.link_off,
-                                    size: 56,
-                                    color: AppColors.textWhite,
+                                  Icon(
+                                    Icons.play_circle_fill,
+                                    size: 72,
+                                    color: AppColors.textWhite.withValues(
+                                      alpha: 0.95,
+                                    ),
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
-                                    kIsWeb
-                                        ? 'This room uses a local file path. Web cannot access files from another device.'
-                                        : 'This room uses a host local file path. Your device cannot access it.',
-                                    textAlign: TextAlign.center,
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: AppColors.textWhite,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    'Ask the host to recreate the room with a public HTTP(S) video URL.',
-                                    textAlign: TextAlign.center,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: AppColors.textWhite
-                                          .withValues(alpha: 0.9),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        )
-                  : _isYouTubeUrl(state.videoUrl!)
-                      ? YoutubePlayerView(
-                          key: _youtubeKey,
-                          videoUrl: state.videoUrl!,
-                        )
-                      : Container(
-                          width: double.infinity,
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Color(0xFF6C5CE7),
-                                Color(0xFF00D9FF),
-                              ],
-                            ),
-                          ),
-                          child: Center(
-                            child: (_videoController != null &&
-                                    _initializeVideoFuture != null)
-                                ? FutureBuilder<void>(
-                                    future: _initializeVideoFuture,
-                                    builder: (context, snapshot) {
-                                      if (snapshot.connectionState !=
-                                          ConnectionState.done) {
-                                        return const CircularProgressIndicator(
-                                          valueColor:
-                                              AlwaysStoppedAnimation<Color>(
-                                            AppColors.textWhite,
-                                          ),
-                                        );
-                                      }
-                                      return Stack(
-                                        alignment: Alignment.bottomCenter,
-                                        children: [
-                                          AspectRatio(
-                                            aspectRatio: _videoController!
-                                                .value.aspectRatio,
-                                            child: VideoPlayer(
-                                              _videoController!,
-                                            ),
-                                          ),
-                                          IconButton(
-                                            iconSize: 40,
-                                            color: AppColors.textWhite,
-                                            icon: Icon(
-                                              _videoController!.value.isPlaying
-                                                  ? Icons.pause_circle_filled
-                                                  : Icons.play_circle_fill,
-                                            ),
-                                            onPressed: () {
-                                              final rs =
-                                                  context.read<RoomBloc>().state;
-                                              unawaited(_togglePlayback(rs));
-                                            },
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  )
-                                : Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.play_circle_fill,
-                                        size: 72,
-                                        color: AppColors.textWhite
-                                            .withValues(alpha: 0.95),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        'Open video in browser / app',
-                                        style: theme.textTheme.titleMedium
-                                            ?.copyWith(
+                                    'Open video in browser / app',
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(
                                           color: AppColors.textWhite,
                                           fontWeight: FontWeight.w600,
                                         ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal:
-                                              AppConstants.spacingMedium,
-                                        ),
-                                        child: SelectableText(
-                                          state.videoUrl!,
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppConstants.spacingMedium,
+                                    ),
+                                    child: SelectableText(
+                                      state.videoUrl!,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
                                             color: AppColors.textWhite
                                                 .withValues(alpha: 0.9),
                                           ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      ElevatedButton.icon(
-                                        onPressed: () async {
-                                          final uri =
-                                              Uri.tryParse(state.videoUrl!);
-                                          if (uri == null || !uri.hasScheme) {
-                                            if (!mounted) return;
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'Invalid video URL. Please recreate the room with a valid link.',
-                                                ),
-                                              ),
-                                            );
-                                            return;
-                                          }
-                                          try {
-                                            final ok = await launchUrl(
-                                              uri,
-                                              mode: LaunchMode
-                                                  .externalApplication,
-                                            );
-                                            if (!mounted) return;
-                                            if (!ok) {
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
-                                                const SnackBar(
-                                                  content: Text(
-                                                    'No app handled this link. Install a browser or try again.',
-                                                  ),
-                                                ),
-                                              );
-                                            }
-                                          } catch (e) {
-                                            if (!mounted) return;
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  'Could not open link: $e',
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                        },
-                                        icon: const Icon(Icons.open_in_new),
-                                        label: const Text('Open Video'),
-                                      ),
-                                    ],
+                                      textAlign: TextAlign.center,
+                                    ),
                                   ),
-                          ),
-                        ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton.icon(
+                                    onPressed: () async {
+                                      final uri = Uri.tryParse(state.videoUrl!);
+                                      if (uri == null || !uri.hasScheme) {
+                                        if (!mounted) return;
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Invalid video URL. Please recreate the room with a valid link.',
+                                            ),
+                                          ),
+                                        );
+                                        return;
+                                      }
+                                      try {
+                                        final ok = await launchUrl(
+                                          uri,
+                                          mode: LaunchMode.externalApplication,
+                                        );
+                                        if (!mounted) return;
+                                        if (!ok) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'No app handled this link. Install a browser or try again.',
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      } catch (e) {
+                                        if (!mounted) return;
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Could not open link: $e',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    icon: const Icon(Icons.open_in_new),
+                                    label: const Text('Open Video'),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
             ),
           ),
           const SizedBox(height: AppConstants.spacingMedium),
@@ -864,8 +842,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
               child: SizedBox(
                 height: 120,
                 child: ClipRRect(
-                  borderRadius:
-                      BorderRadius.circular(AppConstants.borderRadiusMedium),
+                  borderRadius: BorderRadius.circular(
+                    AppConstants.borderRadiusMedium,
+                  ),
                   child: RTCVideoView(_localRenderer, mirror: true),
                 ),
               ),
@@ -945,8 +924,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                     final message = messages[index];
                     final isMe = message.author == 'You';
                     return Align(
-                      alignment:
-                          isMe ? Alignment.centerRight : Alignment.centerLeft,
+                      alignment: isMe
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
                       child: Container(
                         constraints: BoxConstraints(maxWidth: maxBubbleW),
                         margin: const EdgeInsets.only(
@@ -959,8 +939,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                         decoration: BoxDecoration(
                           color: isMe
                               ? theme.colorScheme.primary
-                              : theme.colorScheme.surface
-                                  .withValues(alpha: 0.9),
+                              : theme.colorScheme.surface.withValues(
+                                  alpha: 0.9,
+                                ),
                           borderRadius: BorderRadius.only(
                             topLeft: Radius.circular(
                               AppConstants.borderRadiusMedium,
@@ -990,10 +971,10 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                               message.author,
                               style: theme.textTheme.labelSmall?.copyWith(
                                 color: isMe
-                                    ? AppColors.textWhite
-                                        .withValues(alpha: 0.8)
-                                    : theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.7),
+                                    ? AppColors.textWhite.withValues(alpha: 0.8)
+                                    : theme.colorScheme.onSurface.withValues(
+                                        alpha: 0.7,
+                                      ),
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1045,10 +1026,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                 CircleAvatar(
                   backgroundColor: theme.colorScheme.primary,
                   child: IconButton(
-                    icon: const Icon(
-                      Icons.send,
-                      color: AppColors.textWhite,
-                    ),
+                    icon: const Icon(Icons.send, color: AppColors.textWhite),
                     onPressed: _sendMessage,
                   ),
                 ),

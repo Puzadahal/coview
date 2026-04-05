@@ -41,10 +41,7 @@ class CreateRoomSuccessDialog extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(
-                colors: [
-                  AppColors.success,
-                  AppColors.secondary,
-                ],
+                colors: [AppColors.success, AppColors.secondary],
               ),
             ),
             child: const Icon(
@@ -112,7 +109,9 @@ class CreateRoomSuccessDialog extends StatelessWidget {
                 color: isDark
                     ? AppColors.primaryDarkVariant.withValues(alpha: 0.5)
                     : AppColors.backgroundGrey,
-                borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+                borderRadius: BorderRadius.circular(
+                  AppConstants.borderRadiusMedium,
+                ),
                 border: Border.all(
                   color: AppColors.secondary.withValues(alpha: 0.5),
                   width: 2,
@@ -131,11 +130,7 @@ class CreateRoomSuccessDialog extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Icon(
-                    Icons.copy,
-                    color: AppColors.secondary,
-                    size: 20,
-                  ),
+                  Icon(Icons.copy, color: AppColors.secondary, size: 20),
                 ],
               ),
             ),

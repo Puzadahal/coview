@@ -1,23 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_translate/flutter_translate.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../config/colors/app_colors.dart';
-import '../../../../core/language/app_texts.dart';
-import '../../../../core/language/domain/bloc/app_language_cubit.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AppLanguageCubit, String>(
-      builder: (context, lang) {
-        return Scaffold(
+    return Scaffold(
       backgroundColor: AppColors.primaryDark,
       appBar: AppBar(
         backgroundColor: AppColors.primaryDark,
         foregroundColor: Colors.white,
-        title: Text(AppTexts.tr(lang, 'aboutPageTitle')),
+        title: Text(translate('aboutPageTitle')),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/home'),
@@ -41,7 +37,7 @@ class AboutPage extends StatelessWidget {
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    AppTexts.tr(lang, 'aboutPageHeading'),
+                    translate('aboutPageHeading'),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 40,
@@ -52,7 +48,7 @@ class AboutPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  AppTexts.tr(lang, 'aboutPageSub'),
+                  translate('aboutPageSub'),
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.8),
                     fontSize: 17,
@@ -61,20 +57,20 @@ class AboutPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 _InfoCard(
-                  title: AppTexts.tr(lang, 'whatWeFocus'),
-                  points: const [
-                    'Fast room creation and sharing',
-                    'Smooth playback with room chat',
-                    'Simple flow for joining from any device',
+                  title: translate('whatWeFocus'),
+                  points: [
+                    translate('focus_point_1'),
+                    translate('focus_point_2'),
+                    translate('focus_point_3'),
                   ],
                 ),
                 const SizedBox(height: 16),
                 _InfoCard(
-                  title: AppTexts.tr(lang, 'ourVision'),
-                  points: const [
-                    'Make remote movie nights effortless',
-                    'Keep people connected through shared moments',
-                    'Build a social streaming experience for everyone',
+                  title: translate('ourVision'),
+                  points: [
+                    translate('vision_point_1'),
+                    translate('vision_point_2'),
+                    translate('vision_point_3'),
                   ],
                 ),
               ],
@@ -82,8 +78,6 @@ class AboutPage extends StatelessWidget {
           ),
         ),
       ),
-    );
-      },
     );
   }
 }
@@ -140,4 +134,3 @@ class _InfoCard extends StatelessWidget {
     );
   }
 }
-

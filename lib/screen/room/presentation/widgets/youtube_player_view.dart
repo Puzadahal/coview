@@ -136,6 +136,29 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
     } catch (_) {}
   }
 
+  /// YouTube IFrame API error codes (same semantics as the package's internal mapping).
+  static String _embedErrorExplanation(int code) {
+    switch (code) {
+      case 1:
+        return 'Invalid or malformed video ID.';
+      case 2:
+        return 'The request contains an invalid parameter value.';
+      case 5:
+        return 'This content cannot be played in the embedded player.';
+      case 100:
+        return 'Video not found (removed, private, or wrong ID).';
+      case 101:
+      case 150:
+        return 'The owner disabled playback outside YouTube (embed blocked). '
+            'Use “Open in YouTube” below, or choose another video for watch-together.';
+      case 105:
+        return 'YouTube could not determine the error for this video.';
+      default:
+        return 'This video could not play in the app. Try opening it in YouTube '
+            'or use a different link.';
+    }
+  }
+
   @override
   void dispose() {
     _disposeControllers();
@@ -235,41 +258,73 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
             handleColor: AppColors.primaryAccent,
           ),
         ),
-        builder: (context, player) => Stack(
-          fit: StackFit.expand,
-          alignment: Alignment.center,
-          children: [
-            player,
-            if (c.value.hasError)
-              ColoredBox(
-                color: Colors.black.withValues(alpha: 0.75),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.videocam_off_outlined,
-                        color: Colors.white,
-                        size: 40,
+        builder: (context, player) => ValueListenableBuilder<ypf.YoutubePlayerValue>(
+          valueListenable: c,
+          builder: (context, value, _) {
+            return Stack(
+              fit: StackFit.expand,
+              alignment: Alignment.center,
+              children: [
+                player,
+                if (value.hasError)
+                  ColoredBox(
+                    color: Colors.black.withValues(alpha: 0.82),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.videocam_off_outlined,
+                            color: Colors.white,
+                            size: 40,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _embedErrorExplanation(value.errorCode),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              height: 1.35,
+                            ),
+                          ),
+                          if (value.errorCode != 0) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              'Error code: ${value.errorCode}',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.65),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 14),
+                          FilledButton.icon(
+                            onPressed: _openInYouTube,
+                            icon: const Icon(Icons.open_in_new),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.secondary,
+                              foregroundColor: AppColors.textDark,
+                            ),
+                            label: const Text('Open in YouTube'),
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton(
+                            onPressed: () => c.load(_videoId),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: Colors.white54),
+                            ),
+                            child: const Text('Retry in app'),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'This video can’t play embedded here (often blocked by the uploader). '
-                        'Create the room with a different video link.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                        onPressed: () => c.load(_videoId),
-                        child: const Text('Retry'),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );
