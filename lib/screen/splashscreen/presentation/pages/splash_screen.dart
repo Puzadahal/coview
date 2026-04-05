@@ -39,6 +39,8 @@ class _SplashScreenState extends State<SplashScreen>
       wasLoggedInFlag = prefs.getBool('logged_in') ?? false;
     } catch (_) {}
 
+    if (!mounted) return;
+
     if (currentUser != null || wasLoggedInFlag) {
       context.go('/home');
     } else {

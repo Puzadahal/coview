@@ -24,6 +24,15 @@ Future<void> main() async {
     preferences: SharedTranslatePreferences(),
   );
 
+  // flutter_translate can leave _currentLocale unset if device locale loading
+  // never calls changeLocale; MaterialApp then reads currentLocale and crashes
+  // before the first frame (often seen as a black screen).
+  try {
+    final _ = delegate.currentLocale;
+  } catch (_) {
+    await delegate.changeLocale(delegate.fallbackLocale);
+  }
+
   runApp(LocalizedApp(delegate, const CoviewAppEntry()));
 }
 
