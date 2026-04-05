@@ -141,9 +141,8 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     if (!_hasRemotePlaybackState(state)) {
       return;
     }
-    if (!force) {
-      if (state.playbackVersion == _lastPlaybackVersionApplied) return;
-      _lastPlaybackVersionApplied = state.playbackVersion;
+    if (!force && state.playbackVersion == _lastPlaybackVersionApplied) {
+      return;
     }
 
     final target = _targetPositionSeconds(state);
@@ -151,6 +150,8 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       await _seekLocalTo(state, target);
     }
     await _setPlaying(state, state.isPlaying);
+    if (!mounted) return;
+    _lastPlaybackVersionApplied = state.playbackVersion;
   }
 
   Future<void> _seekLocalTo(RoomState state, double seconds) async {
@@ -383,17 +384,19 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
             padding: const EdgeInsets.all(AppConstants.spacingMedium),
             child: BlocListener<RoomBloc, RoomState>(
               listenWhen: (p, c) =>
+                  c.status != p.status ||
                   c.playbackVersion != p.playbackVersion ||
-                  c.status != p.status,
+                  c.isPlaying != p.isPlaying ||
+                  c.playbackPositionSeconds != p.playbackPositionSeconds ||
+                  c.playbackAnchorServerTimeMs !=
+                      p.playbackAnchorServerTimeMs,
               listener: (context, state) {
                 final cameFromLoading =
                     _listenerPrevStatus == RoomStatus.loading &&
                     state.status == RoomStatus.viewing;
                 _listenerPrevStatus = state.status;
-                final versionBump =
-                    state.playbackVersion != _lastPlaybackVersionApplied;
-                if (!versionBump && !cameFromLoading) return;
-                final force = cameFromLoading && !versionBump;
+                if (state.status != RoomStatus.viewing) return;
+                final force = cameFromLoading;
                 unawaited(_applyPlaybackFromFirestore(state, force: force));
               },
               child: BlocBuilder<RoomBloc, RoomState>(

@@ -86,6 +86,24 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
           ? DateTime.now().subtract(const Duration(seconds: 30))
           : null;
 
+      if (playbackSyncEnabled && _auth.currentUser != null) {
+        final playbackRef = _firestore
+            .collection('rooms')
+            .doc(state.roomId)
+            .collection('playback')
+            .doc('state');
+        final existing = await playbackRef.get();
+        if (!existing.exists) {
+          await playbackRef.set({
+            'isPlaying': false,
+            'positionSeconds': 0.0,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'version': 1,
+            'actorId': _auth.currentUser!.uid,
+          }, SetOptions(merge: true));
+        }
+      }
+
       _messagesSub?.cancel();
       _messagesSub = _firestore
           .collection('rooms')

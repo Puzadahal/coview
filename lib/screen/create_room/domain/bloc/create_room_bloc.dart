@@ -174,6 +174,19 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
 
       await _firestore.collection('rooms').doc(roomId).set(roomData);
 
+      await _firestore
+          .collection('rooms')
+          .doc(roomId)
+          .collection('playback')
+          .doc('state')
+          .set({
+        'isPlaying': false,
+        'positionSeconds': 0.0,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'version': 1,
+        'actorId': currentUser?.uid,
+      }, SetOptions(merge: true));
+
       if (currentUser != null) {
         try {
           final userRoomsRef = _firestore
