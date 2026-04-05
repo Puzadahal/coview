@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -43,6 +44,12 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   Timer? _driftTimer;
   Timer? _playbackSpeedResetTimer;
   RoomStatus _listenerPrevStatus = RoomStatus.viewing;
+  /// YouTube in-player fullscreen: hide chat, show video only.
+  bool _youtubeImmersive = false;
+  /// Non-YouTube: user tapped app fullscreen control.
+  bool _manualVideoOnly = false;
+
+  bool get _videoOnlyLayout => _youtubeImmersive || _manualVideoOnly;
 
   @override
   void initState() {
@@ -280,6 +287,17 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   }
 
   Future<void> _handleRoomBack(BuildContext context) async {
+    if (_manualVideoOnly) {
+      setState(() => _manualVideoOnly = false);
+      await SystemChrome.setPreferredOrientations(const [
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      return;
+    }
     final videoUrl = context.read<RoomBloc>().state.videoUrl ?? '';
     if (_isYouTubeUrl(videoUrl)) {
       final yt = _youtubeKey.currentState;
@@ -319,12 +337,15 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     final isDark = theme.brightness == Brightness.dark;
     final size = MediaQuery.of(context).size;
     final isWide = size.width > 900;
+    final videoOnly = _videoOnlyLayout;
 
     return Scaffold(
       backgroundColor: isDark
           ? AppColors.primaryDark
           : AppColors.backgroundWhite,
-      appBar: AppBar(
+      appBar: videoOnly
+          ? null
+          : AppBar(
         backgroundColor: isDark
             ? AppColors.primaryDarkVariant
             : AppColors.backgroundWhite,
@@ -381,7 +402,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(AppConstants.spacingMedium),
+            padding: videoOnly
+                ? EdgeInsets.zero
+                : const EdgeInsets.all(AppConstants.spacingMedium),
             child: BlocListener<RoomBloc, RoomState>(
               listenWhen: (p, c) =>
                   c.status != p.status ||
@@ -420,6 +443,64 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                     );
                   }
 
+                  if (_videoOnlyLayout) {
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Positioned.fill(
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: _buildVideoPane(
+                              theme,
+                              isDark,
+                              state,
+                              immersive: true,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 4,
+                          left: 4,
+                          right: 4,
+                          child: SafeArea(
+                            bottom: false,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Exit fullscreen',
+                                  style: IconButton.styleFrom(
+                                    backgroundColor:
+                                        Colors.black.withValues(alpha: 0.45),
+                                  ),
+                                  onPressed: () =>
+                                      unawaited(_handleRoomBack(context)),
+                                  icon: const Icon(
+                                    Icons.fullscreen_exit,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Invite friends',
+                                  style: IconButton.styleFrom(
+                                    backgroundColor:
+                                        Colors.black.withValues(alpha: 0.45),
+                                  ),
+                                  onPressed: () =>
+                                      unawaited(_inviteFriends(context)),
+                                  icon: const Icon(
+                                    Icons.ios_share,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
                   return isWide
                       ? Row(
                           children: [
@@ -430,7 +511,11 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                             const SizedBox(width: AppConstants.spacingMedium),
                             Expanded(
                               flex: 2,
-                              child: _buildChatPane(theme, isDark),
+                              child: _buildChatPane(
+                                theme,
+                                isDark,
+                                compactInput: false,
+                              ),
                             ),
                           ],
                         )
@@ -443,7 +528,14 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                             const SizedBox(height: AppConstants.spacingMedium),
                             Expanded(
                               flex: 3,
-                              child: _buildChatPane(theme, isDark),
+                              child: _buildChatPane(
+                                theme,
+                                isDark,
+                                compactInput:
+                                    MediaQuery.orientationOf(context) ==
+                                        Orientation.landscape &&
+                                    MediaQuery.sizeOf(context).height < 520,
+                              ),
                             ),
                           ],
                         );
@@ -514,7 +606,12 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     });
   }
 
-  Widget _buildVideoPane(ThemeData theme, bool isDark, RoomState state) {
+  Widget _buildVideoPane(
+    ThemeData theme,
+    bool isDark,
+    RoomState state, {
+    bool immersive = false,
+  }) {
     final videoUrl = state.videoUrl?.trim() ?? '';
     final isLikelyLocalSource =
         videoUrl.isNotEmpty && _isLikelyLocalPath(videoUrl);
@@ -522,14 +619,18 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppColors.primaryDarkVariant : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(
+          immersive ? 0 : AppConstants.borderRadiusLarge,
+        ),
+        boxShadow: immersive
+            ? const []
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -537,7 +638,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(
-                AppConstants.borderRadiusLarge,
+                immersive ? 0 : AppConstants.borderRadiusLarge,
               ),
               child: state.videoUrl == null || state.videoUrl!.isEmpty
                   ? Container(
@@ -620,6 +721,13 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                   ? YoutubePlayerView(
                       key: _youtubeKey,
                       videoUrl: state.videoUrl!,
+                      immersiveLayout: immersive,
+                      onFullscreenChanged: kIsWeb
+                          ? null
+                          : (expanded) {
+                              if (!mounted) return;
+                              setState(() => _youtubeImmersive = expanded);
+                            },
                     )
                   : Container(
                       width: double.infinity,
@@ -760,6 +868,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                     ),
             ),
           ),
+          if (!immersive) ...[
           const SizedBox(height: AppConstants.spacingMedium),
           Padding(
             padding: const EdgeInsets.symmetric(
@@ -771,6 +880,12 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (!_isYouTubeUrl(state.videoUrl ?? ''))
+                    IconButton(
+                      tooltip: 'Fullscreen video',
+                      onPressed: () => setState(() => _manualVideoOnly = true),
+                      icon: const Icon(Icons.fullscreen),
+                    ),
                   IconButton(
                     onPressed: () => unawaited(_seekRoomBy(state, -10)),
                     icon: const Icon(Icons.replay_10),
@@ -885,12 +1000,24 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                 ),
               ),
             ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildChatPane(ThemeData theme, bool isDark) {
+  Widget _buildChatPane(
+    ThemeData theme,
+    bool isDark, {
+    bool compactInput = false,
+  }) {
+    final headerPadding = compactInput
+        ? const EdgeInsets.symmetric(horizontal: 10, vertical: 6)
+        : const EdgeInsets.all(AppConstants.spacingMedium);
+    final listPadding = compactInput
+        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
+        : const EdgeInsets.all(AppConstants.spacingMedium);
+
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppColors.primaryDarkVariant : AppColors.lightSurface,
@@ -902,7 +1029,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(AppConstants.spacingMedium),
+            padding: headerPadding,
             child: Row(
               children: [
                 Icon(
@@ -954,7 +1081,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                 final messages = state.messages;
                 final maxBubbleW = MediaQuery.sizeOf(context).width * 0.85;
                 return ListView.builder(
-                  padding: const EdgeInsets.all(AppConstants.spacingMedium),
+                  padding: listPadding,
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final message = messages[index];
@@ -1042,7 +1169,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                   child: TextField(
                     controller: _messageController,
                     minLines: 1,
-                    maxLines: 3,
+                    maxLines: compactInput ? 1 : 3,
                     decoration: InputDecoration(
                       hintText: 'Say something to the room...',
                       border: OutlineInputBorder(

@@ -10,7 +10,19 @@ import '../../../../config/colors/app_colors.dart';
 class YoutubePlayerView extends StatefulWidget {
   final String videoUrl;
 
-  const YoutubePlayerView({super.key, required this.videoUrl});
+  /// When the native player enters/exits fullscreen (in-player control), parent
+  /// can hide chat and use a video-only layout.
+  final ValueChanged<bool>? onFullscreenChanged;
+
+  /// Square corners when embedded in an edge-to-edge immersive layout.
+  final bool immersiveLayout;
+
+  const YoutubePlayerView({
+    super.key,
+    required this.videoUrl,
+    this.onFullscreenChanged,
+    this.immersiveLayout = false,
+  });
 
   @override
   State<YoutubePlayerView> createState() => YoutubePlayerViewState();
@@ -20,6 +32,7 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
   ypf.YoutubePlayerController? _mobileController;
   ypi.YoutubePlayerController? _webController;
   String _videoId = '';
+  bool _lastNotifiedFullscreen = false;
 
   @override
   void initState() {
@@ -72,6 +85,14 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
   }
 
   void _disposeControllers() {
+    if (!kIsWeb &&
+        widget.onFullscreenChanged != null &&
+        _lastNotifiedFullscreen) {
+      _lastNotifiedFullscreen = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.onFullscreenChanged?.call(false);
+      });
+    }
     _mobileController?.dispose();
     _mobileController = null;
     _webController?.close();
@@ -267,14 +288,27 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
 
     final c = _mobileController;
     if (c == null) return const SizedBox.shrink();
+    final clipRadius =
+        widget.immersiveLayout ? 0.0 : 16.0;
     // Do not use [YoutubePlayerBuilder]: it forces full window height in
     // landscape and toggles "fullscreen" on rotation, which overflows inside
     // the room card and makes the app bar back button leave the room.
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(clipRadius),
       child: ValueListenableBuilder<ypf.YoutubePlayerValue>(
         valueListenable: c,
         builder: (context, value, _) {
+          if (!kIsWeb && widget.onFullscreenChanged != null) {
+            final fs = value.isFullScreen;
+            if (fs != _lastNotifiedFullscreen) {
+              _lastNotifiedFullscreen = fs;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  widget.onFullscreenChanged!(fs);
+                }
+              });
+            }
+          }
           return PopScope(
             canPop: !value.isFullScreen,
             onPopInvokedWithResult: (didPop, _) {
