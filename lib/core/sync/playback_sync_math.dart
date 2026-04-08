@@ -17,7 +17,7 @@ class PlaybackSyncMath {
     if (!isPlaying) return anchorPositionSeconds;
     if (anchorServerTimeMs <= 0) return anchorPositionSeconds;
     final elapsedSec = (ntpNowMs - anchorServerTimeMs) / 1000.0;
-    if (elapsedSec <= 0) return anchorPositionSeconds;
+    if (elapsedSec <= 0) return anchorPositionSeconds;//Prevent negative drift
     return anchorPositionSeconds + elapsedSec;
   }
 
@@ -30,14 +30,18 @@ class PlaybackSyncMath {
     final ad = diff.abs();
     const hardSeek = 2.0;
     const softBand = 0.35;
-    if (ad <= softBand) return const DriftDecision.none();
+    
+    if (ad <= softBand)  return const DriftDecision.none();//If difference is tiny → do nothing.
+   
     if (ad >= hardSeek) {
       return DriftDecision.hardSeek(expectedSeconds);
-    }
+    }//If difference is huge → jump straight to the correct position.
+
+
     if (diff > 0) {
-      return const DriftDecision.softRate(catchUp: true);
+      return const DriftDecision.softRate(catchUp: true);//If difference is medium (0.35 < ad < 2.0) and local is behind → play slightly faster to catch up.
     }
-    return const DriftDecision.softRate(catchUp: false);
+    return const DriftDecision.softRate(catchUp: false);//If difference is medium and local is ahead → play slightly slower to let the server catch up.
   }
 }
 
@@ -48,18 +52,18 @@ class DriftDecision {
   final bool catchUp;
 
   const DriftDecision.none()
-      : kind = DriftKind.none,
-        seekToSeconds = null,
-        catchUp = false;
+    : kind = DriftKind.none,
+      seekToSeconds = null,
+      catchUp = false;
 
   const DriftDecision.hardSeek(double seconds)
-      : kind = DriftKind.hardSeek,
-        seekToSeconds = seconds,
-        catchUp = false;
+    : kind = DriftKind.hardSeek,
+      seekToSeconds = seconds,
+      catchUp = false;
 
   const DriftDecision.softRate({required this.catchUp})
-      : kind = DriftKind.softRate,
-        seekToSeconds = null;
+    : kind = DriftKind.softRate,
+      seekToSeconds = null;
 }
 
 enum DriftKind { none, softRate, hardSeek }

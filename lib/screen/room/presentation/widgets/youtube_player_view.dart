@@ -288,8 +288,7 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
 
     final c = _mobileController;
     if (c == null) return const SizedBox.shrink();
-    final clipRadius =
-        widget.immersiveLayout ? 0.0 : 16.0;
+    final clipRadius = widget.immersiveLayout ? 0.0 : 16.0;
     // Do not use [YoutubePlayerBuilder]: it forces full window height in
     // landscape and toggles "fullscreen" on rotation, which overflows inside
     // the room card and makes the app bar back button leave the room.

@@ -47,8 +47,7 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
     emit(state.copyWith(status: RoomStatus.loading, error: null));
 
     try {
-      final doc =
-          await _firestore.collection('rooms').doc(state.roomId).get();
+      final doc = await _firestore.collection('rooms').doc(state.roomId).get();
 
       if (!doc.exists) {
         emit(
@@ -111,26 +110,29 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
           .collection('messages')
           .orderBy('createdAt', descending: false)
           .snapshots()
-          .listen((snapshot) {
-        final messages = snapshot.docs.map((doc) {
-          final data = doc.data();
-          final ts = data['createdAt'];
-          DateTime? createdAt;
-          if (ts is Timestamp) {
-            createdAt = ts.toDate();
-          }
-          return RoomMessage(
-            author: (data['author'] as String?) ?? 'Guest',
-            text: (data['text'] as String?) ?? '',
-            createdAt: createdAt,
+          .listen(
+            (snapshot) {
+              final messages = snapshot.docs.map((doc) {
+                final data = doc.data();
+                final ts = data['createdAt'];
+                DateTime? createdAt;
+                if (ts is Timestamp) {
+                  createdAt = ts.toDate();
+                }
+                return RoomMessage(
+                  author: (data['author'] as String?) ?? 'Guest',
+                  text: (data['text'] as String?) ?? '',
+                  createdAt: createdAt,
+                );
+              }).toList();
+              add(
+                RoomMessagesUpdated(_filterMessagesForGuestSession(messages)),
+              );
+            },
+            onError: (Object e, StackTrace st) {
+              debugPrint('RoomBloc: messages subscription error: $e\n$st');
+            },
           );
-        }).toList();
-        add(
-          RoomMessagesUpdated(_filterMessagesForGuestSession(messages)),
-        );
-      }, onError: (Object e, StackTrace st) {
-        debugPrint('RoomBloc: messages subscription error: $e\n$st');
-      });
 
       _playbackSub?.cancel();
       if (playbackSyncEnabled) {
@@ -140,26 +142,29 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
             .collection('playback')
             .doc('state')
             .snapshots()
-            .listen((snap) {
-          final snapData = snap.data();
-          if (snapData == null) return;
-          final updatedAt = snapData['updatedAt'];
-          int anchorMs = 0;
-          if (updatedAt is Timestamp) {
-            anchorMs = updatedAt.millisecondsSinceEpoch;
-          }
-          add(
-            RoomPlaybackUpdated(
-              isPlaying: (snapData['isPlaying'] as bool?) ?? false,
-              positionSeconds:
-                  (snapData['positionSeconds'] as num?)?.toDouble() ?? 0,
-              anchorServerTimeMs: anchorMs,
-              version: (snapData['version'] as num?)?.toInt() ?? 0,
-            ),
-          );
-        }, onError: (Object e, StackTrace st) {
-          debugPrint('RoomBloc: playback subscription error: $e\n$st');
-        });
+            .listen(
+              (snap) {
+                final snapData = snap.data();
+                if (snapData == null) return;
+                final updatedAt = snapData['updatedAt'];
+                int anchorMs = 0;
+                if (updatedAt is Timestamp) {
+                  anchorMs = updatedAt.millisecondsSinceEpoch;
+                }
+                add(
+                  RoomPlaybackUpdated(
+                    isPlaying: (snapData['isPlaying'] as bool?) ?? false,
+                    positionSeconds:
+                        (snapData['positionSeconds'] as num?)?.toDouble() ?? 0,
+                    anchorServerTimeMs: anchorMs,
+                    version: (snapData['version'] as num?)?.toInt() ?? 0,
+                  ),
+                );
+              },
+              onError: (Object e, StackTrace st) {
+                debugPrint('RoomBloc: playback subscription error: $e\n$st');
+              },
+            );
       }
 
       emit(
@@ -197,17 +202,14 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
         .doc(state.roomId)
         .collection('messages')
         .add({
-      'text': trimmed,
-      'author': authorName,
-      'authorId': user?.uid,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+          'text': trimmed,
+          'author': authorName,
+          'authorId': user?.uid,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
   }
 
-  void _onMessagesUpdated(
-    RoomMessagesUpdated event,
-    Emitter<RoomState> emit,
-  ) {
+  void _onMessagesUpdated(RoomMessagesUpdated event, Emitter<RoomState> emit) {
     emit(state.copyWith(messages: event.messages));
   }
 
@@ -226,21 +228,18 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
           .collection('playback')
           .doc('state')
           .set({
-        'isPlaying': event.isPlaying,
-        'positionSeconds': event.positionSeconds,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'actorId': _auth.currentUser?.uid,
-        'version': FieldValue.increment(1),
-      }, SetOptions(merge: true));
+            'isPlaying': event.isPlaying,
+            'positionSeconds': event.positionSeconds,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'actorId': _auth.currentUser?.uid,
+            'version': FieldValue.increment(1),
+          }, SetOptions(merge: true));
     } on FirebaseException catch (e) {
       debugPrint('RoomBloc: playback write failed: ${e.code} ${e.message}');
     }
   }
 
-  void _onPlaybackUpdated(
-    RoomPlaybackUpdated event,
-    Emitter<RoomState> emit,
-  ) {
+  void _onPlaybackUpdated(RoomPlaybackUpdated event, Emitter<RoomState> emit) {
     emit(
       state.copyWith(
         isPlaying: event.isPlaying,
@@ -258,4 +257,3 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
     return super.close();
   }
 }
-

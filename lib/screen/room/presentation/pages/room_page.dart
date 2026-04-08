@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -39,14 +38,18 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       GlobalKey<YoutubePlayerViewState>();
   RoomCallService? _callService;
   MediaStream? _localCallStream;
+
+
   final _localRenderer = RTCVideoRenderer();
   int _lastPlaybackVersionApplied = -1;
+  //Avoid back-to-back YouTube drift seeks; each seek shows buffering/loading.
+  DateTime? _lastYoutubeDriftSeekWallClock;
   Timer? _driftTimer;
   Timer? _playbackSpeedResetTimer;
   RoomStatus _listenerPrevStatus = RoomStatus.viewing;
-  /// YouTube in-player fullscreen: hide chat, show video only.
+  // YouTube in-player fullscreen: hide chat, show video only.
   bool _youtubeImmersive = false;
-  /// Non-YouTube: user tapped app fullscreen control.
+  // Non-YouTube: user tapped app fullscreen control.
   bool _manualVideoOnly = false;
 
   bool get _videoOnlyLayout => _youtubeImmersive || _manualVideoOnly;
@@ -129,18 +132,18 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
 
   bool _hasRemotePlaybackState(RoomState state) => state.playbackVersion > 0;
 
-  /// When [playbackAnchorServerTimeMs] is 0 (e.g. `updatedAt` not resolved yet) or
-  /// this device's clock (with NTP offset) is **behind** the server anchor,
-  /// [PlaybackSyncMath.expectedPositionSeconds] stays frozen at
-  /// [RoomState.playbackPositionSeconds] while the player keeps moving. Drift
-  /// correction then sees a large gap and seeks backward — on a phone this
-  /// often looks like the video only plays for ~1 second.
+  // When [playbackAnchorServerTimeMs] is 0 (e.g. `updatedAt` not resolved yet) or
+  // this device's clock (with NTP offset) is **behind** the server anchor,
+  // [PlaybackSyncMath.expectedPositionSeconds] stays frozen at
+  // [RoomState.playbackPositionSeconds] while the player keeps moving. Drift
+  // correction then sees a large gap and seeks backward — on a phone this
+  // often looks like the video only plays for ~1 second.
   bool _playbackAnchorCoherentForDrift(RoomState state) {
     final anchor = state.playbackAnchorServerTimeMs;
     if (anchor <= 0) return false;
     return NtpClock.instance.nowMs >= anchor;
   }
-
+//Apply playback state from Firestore to local player, unless we already applied this version or there's no remote state. On YouTube we only apply if the anchor time is coherent to avoid seeking into the future.
   Future<void> _applyPlaybackFromFirestore(
     RoomState state, {
     bool force = false,
@@ -203,7 +206,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       vc.setPlaybackSpeed(1.0);
     });
   }
-
+//Drift correction
   Future<void> _correctDriftOnce() async {
     if (!mounted) return;
     final state = context.read<RoomBloc>().state;
@@ -222,10 +225,28 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       if (state.isPlaying != playing) {
         await _setPlaying(state, state.isPlaying);
       }
-      if (_playbackAnchorCoherentForDrift(state) &&
-          (expected - local).abs() > 0.5) {
-        await _youtubeKey.currentState?.seekToSeconds(expected);
+      if (!_playbackAnchorCoherentForDrift(state)) {
+        return;
       }
+      // Previously we sought whenever |drift| > 0.5s every 2s. YouTube's reported
+      // position lags real playback, so that caused endless seeks → constant loading.
+      // Match file-player "hard seek" threshold only, plus a cooldown after seeks.
+      final decision = PlaybackSyncMath.driftDecision(
+        expectedSeconds: expected,
+        localSeconds: local,
+      );
+      if (decision.kind != DriftKind.hardSeek) {
+        return;
+      }
+      final now = DateTime.now();
+      final last = _lastYoutubeDriftSeekWallClock;
+      if (last != null &&
+          now.difference(last) < const Duration(seconds: 5)) {
+        return;
+      }
+      _lastYoutubeDriftSeekWallClock = now;
+      final to = decision.seekToSeconds ?? expected;
+      await _youtubeKey.currentState?.seekToSeconds(to);
       return;
     }
 
