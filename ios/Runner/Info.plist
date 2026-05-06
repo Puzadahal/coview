@@ -52,5 +52,9 @@
 		<string>tg</string>
 		<string>discord</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Coview uses your camera for room video calling.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Coview uses your microphone for room voice and video calls.</string>
 </dict>
 </plist>

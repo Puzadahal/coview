@@ -37,10 +37,15 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   final GlobalKey<YoutubePlayerViewState> _youtubeKey =
       GlobalKey<YoutubePlayerViewState>();
   RoomCallService? _callService;
+  StreamSubscription<MediaStream>? _remoteStreamSub;
   MediaStream? _localCallStream;
-
-
+  MediaStream? _remoteCallStream;
   final _localRenderer = RTCVideoRenderer();
+  final _remoteRenderer = RTCVideoRenderer();
+  bool _renderersInitialized = false;
+  bool _isCallConnecting = false;
+  bool _videoBubbleVisible = false;
+  Offset _videoBubbleOffset = const Offset(16, 16);
   int _lastPlaybackVersionApplied = -1;
   //Avoid back-to-back YouTube drift seeks; each seek shows buffering/loading.
   DateTime? _lastYoutubeDriftSeekWallClock;
@@ -71,8 +76,79 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _videoController?.dispose();
+    _remoteStreamSub?.cancel();
+    unawaited(_callService?.dispose());
     _localRenderer.dispose();
+    _remoteRenderer.dispose();
     super.dispose();
+  }
+
+  Future<void> _initializeCallRenderers() async {
+    if (_renderersInitialized) return;
+    try {
+      await _localRenderer.initialize();
+      await _remoteRenderer.initialize();
+    } catch (e) {
+      _renderersInitialized = false;
+      rethrow;
+    }
+    if (!mounted) return;
+    _renderersInitialized = true;
+  }
+
+  Future<void> _startOrJoinCall(RoomState state) async {
+    if (_isCallConnecting) return;
+    _isCallConnecting = true;
+    try {
+    await _initializeCallRenderers();
+    if (_callService == null) {
+      _callService = RoomCallService(state.roomId);
+      _remoteStreamSub = _callService!.remoteStreamUpdates.listen((stream) {
+        if (!mounted) return;
+        setState(() {
+          _remoteCallStream = stream;
+          _remoteRenderer.srcObject = stream;
+          _videoBubbleVisible = true;
+        });
+      });
+    }
+    final canJoin = await _callService!.hostOfferExists();
+    if (canJoin) {
+      await _callService!.joinCall();
+    } else {
+      await _callService!.startCall();
+    }
+    if (!mounted) return;
+    setState(() {
+      _localCallStream = _callService!.localStream;
+      _remoteCallStream = _callService!.remoteStream;
+      _localRenderer.srcObject = _localCallStream;
+      _remoteRenderer.srcObject = _remoteCallStream;
+      _videoBubbleVisible = true;
+    });
+    } finally {
+      _isCallConnecting = false;
+    }
+  }
+
+  Future<void> _toggleCallBubble(RoomState state) async {
+    try {
+      if (_remoteCallStream == null) {
+        await _startOrJoinCall(state);
+      } else {
+        if (!mounted) return;
+        setState(() => _videoBubbleVisible = !_videoBubbleVisible);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Camera/mic: allow permissions in System settings. ($e)',
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -522,7 +598,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                     );
                   }
 
-                  return isWide
+                  final content = isWide
                       ? Row(
                           children: [
                             Expanded(
@@ -560,6 +636,14 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                             ),
                           ],
                         );
+
+                  return Stack(
+                    children: [
+                      content,
+                      if (_videoBubbleVisible && _remoteCallStream != null)
+                        _buildRemoteVideoBubble(),
+                    ],
+                  );
                 },
               ),
             ),
@@ -938,73 +1022,20 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                   ),
                   const SizedBox(width: 12),
                   IconButton(
-                    tooltip: 'Start Call (Host)',
-                    onPressed: () async {
-                      try {
-                        _callService ??= RoomCallService(state.roomId);
-                        await _localRenderer.initialize();
-                        await _callService!.startCall();
-                        if (!mounted) return;
-                        setState(() {
-                          _localCallStream = _callService!.localStream;
-                          _localRenderer.srcObject = _localCallStream;
-                        });
-                      } catch (e) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Camera/mic: allow permissions in System settings. ($e)',
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.video_call),
-                  ),
-                  IconButton(
-                    tooltip: 'Join Call (Guest)',
-                    onPressed: () async {
-                      try {
-                        _callService ??= RoomCallService(state.roomId);
-                        await _localRenderer.initialize();
-                        await _callService!.joinCall();
-                        if (!mounted) return;
-                        setState(() {
-                          _localCallStream = _callService!.localStream;
-                          _localRenderer.srcObject = _localCallStream;
-                        });
-                      } catch (e) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Camera/mic: allow permissions in System settings. ($e)',
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.call),
-                  ),
-                  IconButton(
-                    tooltip: 'End Call',
-                    onPressed: () async {
-                      await _callService?.dispose();
-                      if (!mounted) return;
-                      setState(() {
-                        _localCallStream = null;
-                        _localRenderer.srcObject = null;
-                      });
-                    },
-                    icon: const Icon(Icons.call_end),
+                    tooltip: 'Video bubble',
+                    onPressed: () => unawaited(_toggleCallBubble(state)),
+                    icon: Icon(
+                      _videoBubbleVisible
+                          ? Icons.videocam
+                          : Icons.videocam_outlined,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
           const SizedBox(height: AppConstants.spacingSmall),
-          if (_localCallStream != null)
+          if (_localCallStream != null && _videoBubbleVisible)
             Padding(
               padding: const EdgeInsets.only(
                 left: AppConstants.spacingMedium,
@@ -1023,6 +1054,70 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildRemoteVideoBubble() {
+    return Positioned(
+      right: _videoBubbleOffset.dx,
+      bottom: _videoBubbleOffset.dy,
+      child: GestureDetector(
+        onPanUpdate: (details) {
+          if (!mounted) return;
+          setState(() {
+            _videoBubbleOffset = Offset(
+              (_videoBubbleOffset.dx - details.delta.dx).clamp(8, 220),
+              (_videoBubbleOffset.dy - details.delta.dy).clamp(8, 420),
+            );
+          });
+        },
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: 140,
+            height: 190,
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white24),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black45,
+                  blurRadius: 12,
+                  offset: Offset(0, 6),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Stack(
+                children: [
+                  Positioned.fill(child: RTCVideoView(_remoteRenderer)),
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: InkWell(
+                      onTap: () => setState(() => _videoBubbleVisible = false),
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
