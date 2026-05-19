@@ -32,14 +32,10 @@ class PreviousRoomsSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.history,
-                color: AppColors.primaryAccent,
-                size: 24,
-              ),
+              Icon(Icons.history, color: AppColors.primaryAccent, size: 24),
               const SizedBox(width: 12),
               Text(
-                'Previous Rooms',
+                'Recent Room',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -51,8 +47,8 @@ class PreviousRoomsSection extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             user == null
-                ? 'Login to see and rejoin your previous watch parties.'
-                : 'View and rejoin your previous watch parties.',
+                ? 'Sign in to jump back into your latest watch party.'
+                : 'Your most recently joined room — tap Rejoin to continue.',
             style: TextStyle(
               fontSize: 14,
               color: isDark
@@ -84,7 +80,7 @@ class _RoomsList extends StatelessWidget {
         .doc(userId)
         .collection('rooms')
         .orderBy('lastJoinedAt', descending: true)
-        .limit(10);
+        .limit(1);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: roomsRef.snapshots(),
@@ -97,54 +93,116 @@ class _RoomsList extends StatelessWidget {
           return const _EmptyState(showLoginHint: false);
         }
 
-        final docs = snapshot.data!.docs;
-        return ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: docs.length,
-          separatorBuilder: (_, _) => const Divider(height: 16),
-          itemBuilder: (context, index) {
-            final data = docs[index].data();
-            final roomId = data['roomId'] as String? ?? '';
-            final name = data['name'] as String? ?? 'Watch Room';
-            final videoUrl = data['videoUrl'] as String? ?? '';
-            final isHost = data['isHost'] as bool? ?? false;
+        final data = snapshot.data!.docs.first.data();
+        final roomId = data['roomId'] as String? ?? '';
+        final name = data['name'] as String? ?? 'Watch Room';
+        final videoUrl = data['videoUrl'] as String? ?? '';
+        final isHost = data['isHost'] as bool? ?? false;
+        final subtitle = videoUrl.isNotEmpty
+            ? videoUrl
+            : (roomId.isNotEmpty ? '#$roomId' : '');
 
-            return ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(
-                isHost ? Icons.star : Icons.play_circle_fill,
-                color: AppColors.primaryAccent,
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: roomId.isNotEmpty ? () => context.go('/join/$roomId') : null,
+            borderRadius: BorderRadius.circular(
+              AppConstants.borderRadiusMedium,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryAccent.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      isHost
+                          ? Icons.star_rounded
+                          : Icons.play_circle_fill_rounded,
+                      color: AppColors.primaryAccent,
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                name,
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark
+                                      ? AppColors.textWhite
+                                      : AppColors.textDark,
+                                ),
+                              ),
+                            ),
+                            if (isHost)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.secondary.withValues(
+                                    alpha: 0.25,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Host',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark
+                                        ? AppColors.textWhite
+                                        : AppColors.textDark,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark
+                                ? AppColors.textWhite.withValues(alpha: 0.65)
+                                : AppColors.textGrey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.icon(
+                    onPressed: roomId.isNotEmpty
+                        ? () => context.go('/join/$roomId')
+                        : null,
+                    icon: const Icon(Icons.arrow_forward, size: 18),
+                    label: const Text('Rejoin'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.secondary,
+                      foregroundColor: AppColors.textDark,
+                    ),
+                  ),
+                ],
               ),
-              title: Text(
-                name,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? AppColors.textWhite : AppColors.textDark,
-                ),
-              ),
-              subtitle: Text(
-                videoUrl.isNotEmpty ? videoUrl : roomId,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDark
-                      ? AppColors.textWhite.withValues(alpha: 0.7)
-                      : AppColors.textGrey,
-                ),
-              ),
-              trailing: TextButton(
-                onPressed: () {
-                  if (roomId.isNotEmpty) {
-                    context.go('/join/$roomId');
-                  }
-                },
-                child: const Text('Rejoin'),
-              ),
-            );
-          },
+            ),
+          ),
         );
       },
     );
@@ -170,7 +228,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'No previous rooms',
+            'No recent room',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -180,8 +238,8 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             showLoginHint
-                ? 'Sign in and create or join rooms to see them here.'
-                : 'Create or join a room to get started!',
+                ? 'Sign in and create or join a room — your latest one will appear here.'
+                : 'Create or join a room — your most recent session will show here.',
             style: TextStyle(
               fontSize: 14,
               color: isDark
@@ -194,4 +252,3 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
-

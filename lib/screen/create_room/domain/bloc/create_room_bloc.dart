@@ -18,7 +18,9 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     on<ParticipantLimitChanged>(_onParticipantLimitChanged);
     on<TextChatEnabledChanged>(_onTextChatEnabledChanged);
     on<VoiceChatEnabledChanged>(_onVoiceChatEnabledChanged);
+    on<VideoCallEnabledChanged>(_onVideoCallEnabledChanged);
     on<VideoBubblesEnabledChanged>(_onVideoBubblesEnabledChanged);
+    on<SensitiveWordsFilterChanged>(_onSensitiveWordsFilterChanged);
     on<AdvancedSettingsToggled>(_onAdvancedSettingsToggled);
     on<CreateRoomButtonPressed>(_onCreateRoomButtonPressed);
     on<CreateRoomFormReset>(_onCreateRoomFormReset);
@@ -39,12 +41,14 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     Emitter<CreateRoomState> emit,
   ) async {
     final normalized = _normalizeVideoUrl(event.url);
-    emit(state.copyWith(
-      videoUrl: normalized,
-      isUrlValid: false,
-      videoThumbnail: null,
-      status: CreateRoomStatus.validating,
-    ));
+    emit(
+      state.copyWith(
+        videoUrl: normalized,
+        isUrlValid: false,
+        videoThumbnail: null,
+        status: CreateRoomStatus.validating,
+      ),
+    );
 
     if (normalized.trim().isNotEmpty) {
       final isValid = _validateUrl(normalized);
@@ -54,17 +58,21 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
         thumbnail = _getThumbnailUrl(normalized);
       }
 
-      emit(state.copyWith(
-        isUrlValid: isValid,
-        videoThumbnail: thumbnail,
-        status: CreateRoomStatus.initial,
-      ));
+      emit(
+        state.copyWith(
+          isUrlValid: isValid,
+          videoThumbnail: thumbnail,
+          status: CreateRoomStatus.initial,
+        ),
+      );
     } else {
-      emit(state.copyWith(
-        isUrlValid: false,
-        videoThumbnail: null,
-        status: CreateRoomStatus.initial,
-      ));
+      emit(
+        state.copyWith(
+          isUrlValid: false,
+          videoThumbnail: null,
+          status: CreateRoomStatus.initial,
+        ),
+      );
     }
   }
 
@@ -107,11 +115,25 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     emit(state.copyWith(voiceChatEnabled: event.enabled));
   }
 
+  void _onVideoCallEnabledChanged(
+    VideoCallEnabledChanged event,
+    Emitter<CreateRoomState> emit,
+  ) {
+    emit(state.copyWith(videoCallEnabled: event.enabled));
+  }
+
   void _onVideoBubblesEnabledChanged(
     VideoBubblesEnabledChanged event,
     Emitter<CreateRoomState> emit,
   ) {
     emit(state.copyWith(videoBubblesEnabled: event.enabled));
+  }
+
+  void _onSensitiveWordsFilterChanged(
+    SensitiveWordsFilterChanged event,
+    Emitter<CreateRoomState> emit,
+  ) {
+    emit(state.copyWith(sensitiveWordsFilterEnabled: event.enabled));
   }
 
   void _onAdvancedSettingsToggled(
@@ -126,10 +148,12 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     Emitter<CreateRoomState> emit,
   ) async {
     if (!state.isFormValid) {
-      emit(state.copyWith(
-        status: CreateRoomStatus.failure,
-        errorMessage: 'Please fill all required fields correctly',
-      ));
+      emit(
+        state.copyWith(
+          status: CreateRoomStatus.failure,
+          errorMessage: 'Please fill all required fields correctly',
+        ),
+      );
       return;
     }
 
@@ -143,12 +167,14 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
           final cred = await _auth.signInAnonymously();
           currentUser = cred.user;
         } on fb.FirebaseAuthException catch (e) {
-          emit(state.copyWith(
-            status: CreateRoomStatus.failure,
-            errorMessage: e.code == 'operation-not-allowed'
-                ? 'Anonymous sign-in is disabled. Enable it in Firebase Console → Authentication → Sign-in method, or log in with Google.'
-                : 'Could not start a guest session (${e.message ?? e.code}).',
-          ));
+          emit(
+            state.copyWith(
+              status: CreateRoomStatus.failure,
+              errorMessage: e.code == 'operation-not-allowed'
+                  ? 'Anonymous sign-in is disabled. Enable it in Firebase Console → Authentication → Sign-in method, or log in with Google.'
+                  : 'Could not start a guest session (${e.message ?? e.code}).',
+            ),
+          );
           return;
         }
       }
@@ -164,13 +190,17 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
         'participantLimit': state.participantLimit,
         'textChatEnabled': state.textChatEnabled,
         'voiceChatEnabled': state.voiceChatEnabled,
+        'videoCallEnabled': state.videoCallEnabled,
         'videoBubblesEnabled': state.videoBubblesEnabled,
+        'sensitiveWordsFilterEnabled': state.sensitiveWordsFilterEnabled,
         'createdAt': FieldValue.serverTimestamp(),
         'hostId': currentUser?.uid,
-        'hostName': currentUser?.displayName ??
-            currentUser?.email ??
-            'Guest',
+        'hostName': currentUser?.displayName ?? currentUser?.email ?? 'Guest',
       };
+      final storagePath = _extractFirebaseStoragePath(state.videoUrl);
+      if (storagePath != null) {
+        roomData['videoStoragePath'] = storagePath;
+      }
 
       await _firestore.collection('rooms').doc(roomId).set(roomData);
 
@@ -180,12 +210,12 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
           .collection('playback')
           .doc('state')
           .set({
-        'isPlaying': false,
-        'positionSeconds': 0.0,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'version': 1,
-        'actorId': currentUser?.uid,
-      }, SetOptions(merge: true));
+            'isPlaying': false,
+            'positionSeconds': 0.0,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'version': 1,
+            'actorId': currentUser?.uid,
+          }, SetOptions(merge: true));
 
       if (currentUser != null) {
         try {
@@ -208,23 +238,29 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
 
       final inviteLink = '/join/$roomId';
 
-      emit(state.copyWith(
-        status: CreateRoomStatus.success,
-        createdRoomId: roomId,
-        inviteLink: inviteLink,
-      ));
+      emit(
+        state.copyWith(
+          status: CreateRoomStatus.success,
+          createdRoomId: roomId,
+          inviteLink: inviteLink,
+        ),
+      );
     } on FirebaseException catch (e) {
       debugPrint('CreateRoom Firestore/Auth error: ${e.code} ${e.message}');
-      emit(state.copyWith(
-        status: CreateRoomStatus.failure,
-        errorMessage: _firestoreErrorMessage(e),
-      ));
+      emit(
+        state.copyWith(
+          status: CreateRoomStatus.failure,
+          errorMessage: _firestoreErrorMessage(e),
+        ),
+      );
     } catch (e, st) {
       debugPrint('CreateRoom error: $e\n$st');
-      emit(state.copyWith(
-        status: CreateRoomStatus.failure,
-        errorMessage: 'Failed to create room: $e',
-      ));
+      emit(
+        state.copyWith(
+          status: CreateRoomStatus.failure,
+          errorMessage: 'Failed to create room: $e',
+        ),
+      );
     }
   }
 
@@ -250,6 +286,7 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
 
   bool _validateUrl(String url) {
     if (url.trim().isEmpty) return false;
+    if (_isLikelyLocalVideoPath(url)) return true;
 
     final uri = Uri.tryParse(url);
     if (uri == null || !uri.hasScheme) return false;
@@ -278,6 +315,27 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
         lowerPath.endsWith('.m3u8') ||
         lowerPath.endsWith('.webm') ||
         lowerPath.endsWith('.mov');
+  }
+
+  bool _isLikelyLocalVideoPath(String value) {
+    final raw = value.trim();
+    if (raw.isEmpty) return false;
+
+    final uri = Uri.tryParse(raw);
+    final hasLocalScheme = uri?.scheme == 'file';
+    final hasWindowsDrive = RegExp(r'^[a-zA-Z]:\\').hasMatch(raw);
+    final hasUnixLikePath = raw.startsWith('/') || raw.startsWith('./');
+    if (!hasLocalScheme && !hasWindowsDrive && !hasUnixLikePath) return false;
+
+    final lower = raw.toLowerCase();
+    return lower.endsWith('.mp4') ||
+        lower.endsWith('.mkv') ||
+        lower.endsWith('.mov') ||
+        lower.endsWith('.avi') ||
+        lower.endsWith('.wmv') ||
+        lower.endsWith('.flv') ||
+        lower.endsWith('.webm') ||
+        lower.endsWith('.m3u8');
   }
 
   String _normalizeVideoUrl(String input) {
@@ -325,5 +383,22 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
   String _generateRoomId() {
     final random = DateTime.now().millisecondsSinceEpoch.toString();
     return 'room_${random.substring(random.length - 8)}';
+  }
+
+  String? _extractFirebaseStoragePath(String input) {
+    final raw = input.trim();
+    final uri = Uri.tryParse(raw);
+    if (uri == null || !uri.hasScheme) return null;
+    final host = uri.host.toLowerCase();
+    if (!(host.contains('firebasestorage.googleapis.com') ||
+        host.contains('storage.googleapis.com'))) {
+      return null;
+    }
+    final marker = '/o/';
+    final idx = uri.path.indexOf(marker);
+    if (idx == -1) return null;
+    final encoded = uri.path.substring(idx + marker.length);
+    if (encoded.isEmpty) return null;
+    return Uri.decodeComponent(encoded);
   }
 }

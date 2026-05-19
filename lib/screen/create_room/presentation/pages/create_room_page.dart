@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -226,7 +229,157 @@ class _RoomNameField extends StatelessWidget {
   }
 }
 
-class _VideoUrlField extends StatelessWidget {
+class _VideoUrlField extends StatefulWidget {
+  @override
+  State<_VideoUrlField> createState() => _VideoUrlFieldState();
+}
+
+class _VideoUrlFieldState extends State<_VideoUrlField> {
+  late final TextEditingController _controller;
+  bool _isUploading = false;
+  double _uploadProgress = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickVideoFile() async {
+    try {
+      setState(() {
+        _isUploading = false;
+        _uploadProgress = 0;
+      });
+      final picked = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowMultiple: false,
+        withData: true,
+        allowedExtensions: const ['mp4', 'mkv', 'mov', 'avi', 'wmv', 'webm'],
+      );
+      final file = (picked != null && picked.files.isNotEmpty)
+          ? picked.files.first
+          : null;
+      if (file == null) return;
+
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not read file bytes for upload. Try a smaller file or paste a public URL.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      setState(() {
+        _isUploading = true;
+        _uploadProgress = 0;
+      });
+      final publicUrl = await _uploadToStorage(file, bytes);
+
+      if (!mounted) return;
+      _controller.text = publicUrl;
+      context.read<CreateRoomBloc>().add(VideoUrlChanged(publicUrl));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Upload complete. Public link added.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+          _uploadProgress = 0;
+        });
+      }
+    }
+  }
+
+  Future<String> _uploadToStorage(PlatformFile file, Uint8List bytes) async {
+    var user = fb.FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      final cred = await fb.FirebaseAuth.instance.signInAnonymously();
+      user = cred.user;
+    }
+    if (user == null) {
+      throw Exception('User auth unavailable for upload.');
+    }
+
+    final originalName = (file.name.isNotEmpty ? file.name : 'video.mp4')
+        .replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    final ext = _extensionOf(originalName);
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final storagePath =
+        'room_uploads/${user.uid}/$timestamp-${timestamp % 1000}.$ext';
+
+    final metadata = SettableMetadata(
+      contentType: _contentTypeForExtension(ext),
+      customMetadata: {'originalName': originalName},
+    );
+    final ref = FirebaseStorage.instance.ref().child(storagePath);
+    final task = ref.putData(bytes, metadata);
+
+    task.snapshotEvents.listen((snapshot) {
+      if (!mounted) return;
+      final total = snapshot.totalBytes;
+      if (total <= 0) return;
+      setState(() {
+        _uploadProgress = snapshot.bytesTransferred / total;
+      });
+    });
+
+    await task;
+    return ref.getDownloadURL();
+  }
+
+  String _extensionOf(String fileName) {
+    final dot = fileName.lastIndexOf('.');
+    if (dot == -1 || dot == fileName.length - 1) return 'mp4';
+    return fileName.substring(dot + 1).toLowerCase();
+  }
+
+  String _contentTypeForExtension(String ext) {
+    switch (ext) {
+      case 'm3u8':
+        return 'application/vnd.apple.mpegurl';
+      case 'webm':
+        return 'video/webm';
+      case 'mov':
+        return 'video/quicktime';
+      case 'avi':
+        return 'video/x-msvideo';
+      case 'wmv':
+        return 'video/x-ms-wmv';
+      case 'mkv':
+        return 'video/x-matroska';
+      case 'mp4':
+      default:
+        return 'video/mp4';
+    }
+  }
+
+  bool _isLocalPath(String value) {
+    final raw = value.trim();
+    if (raw.isEmpty) return false;
+    final uri = Uri.tryParse(raw);
+    if (uri?.scheme == 'file') return true;
+    if (RegExp(r'^[a-zA-Z]:\\').hasMatch(raw)) return true;
+    return raw.startsWith('/') || raw.startsWith('./');
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -237,6 +390,9 @@ class _VideoUrlField extends StatelessWidget {
           previous.videoUrl != current.videoUrl ||
           previous.isUrlValid != current.isUrlValid,
       builder: (context, state) {
+        if (_controller.text != state.videoUrl) {
+          _controller.text = state.videoUrl;
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -252,6 +408,7 @@ class _VideoUrlField extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             TextField(
+              controller: _controller,
               onChanged: (value) {
                 context.read<CreateRoomBloc>().add(VideoUrlChanged(value));
               },
@@ -306,19 +463,38 @@ class _VideoUrlField extends StatelessWidget {
                   style: TextStyle(fontSize: 12, color: AppColors.error),
                 ),
               ),
+            if (state.videoUrl.trim().isNotEmpty &&
+                _isLocalPath(state.videoUrl))
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Local files work only on the host device. For shared playback, use a public URL.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () {
-                  // TODO: Implement file upload
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('File upload coming soon!')),
-                  );
-                },
-                icon: Icon(Icons.upload_file, color: theme.colorScheme.primary),
+                onPressed: _isUploading
+                    ? null
+                    : () {
+                        _pickVideoFile();
+                      },
+                icon: _isUploading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(Icons.upload_file, color: theme.colorScheme.primary),
                 label: Text(
-                  'Upload Video',
+                  _isUploading
+                      ? 'Uploading... ${(_uploadProgress * 100).toStringAsFixed(0)}%'
+                      : 'Upload Video',
                   style: TextStyle(
                     color: theme.colorScheme.primary,
                     fontWeight: FontWeight.w600,
@@ -737,6 +913,18 @@ class _CommunicationOptions extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _CommunicationToggle(
+              icon: Icons.video_call_outlined,
+              title: 'Video Call',
+              value: state.videoCallEnabled,
+              onChanged: (value) {
+                HapticFeedback.lightImpact();
+                context.read<CreateRoomBloc>().add(
+                  VideoCallEnabledChanged(value),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _CommunicationToggle(
               icon: Icons.videocam_outlined,
               title: 'Video Bubbles',
               value: state.videoBubblesEnabled,
@@ -744,6 +932,18 @@ class _CommunicationOptions extends StatelessWidget {
                 HapticFeedback.lightImpact();
                 context.read<CreateRoomBloc>().add(
                   VideoBubblesEnabledChanged(value),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _CommunicationToggle(
+              icon: Icons.security_outlined,
+              title: 'Sensitive Words Filter',
+              value: state.sensitiveWordsFilterEnabled,
+              onChanged: (value) {
+                HapticFeedback.lightImpact();
+                context.read<CreateRoomBloc>().add(
+                  SensitiveWordsFilterChanged(value),
                 );
               },
             ),

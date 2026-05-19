@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:go_router/go_router.dart';
 import 'package:coview/screen/auth/domain/bloc/login_event.dart';
 
@@ -85,6 +86,66 @@ class _LoginPageContentState extends State<_LoginPageContent> {
       context.read<LoginBloc>().add(const FieldUnfocused());
     }
   }
+
+  Future<void> _showForgotPasswordDialog() async {
+    final loginEmail = context.read<LoginBloc>().state.email.trim();
+    final initial = _emailController.text.trim().isNotEmpty
+        ? _emailController.text.trim()
+        : loginEmail;
+    final emailField = TextEditingController(text: initial);
+    final sent = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset Password'),
+        content: TextField(
+          controller: emailField,
+          decoration: const InputDecoration(
+            labelText: 'Email',
+            hintText: 'Enter your account email',
+          ),
+          keyboardType: TextInputType.emailAddress,
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Send Link'),
+          ),
+        ],
+      ),
+    );
+    final email = emailField.text.trim();
+    emailField.dispose();
+    if (sent != true || !mounted) return;
+    if (!_emailLooksValid(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid email address.')),
+      );
+      return;
+    }
+    try {
+      await fb_auth.FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Password reset sent to $email')));
+    } on fb_auth.FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? 'Could not send reset email')),
+      );
+    }
+  }
+
+  bool _emailLooksValid(String email) =>
+      email.contains('@') &&
+      email.length > 3 &&
+      !email.startsWith('@') &&
+      !email.endsWith('@');
 
   @override
   void dispose() {
@@ -296,10 +357,12 @@ class _LoginPageContentState extends State<_LoginPageContent> {
                                         style: TextStyle(
                                           fontSize: 14,
                                           color: isDark
-                                              ? AppColors.textWhite
-                                                  .withValues(alpha: 0.95)
-                                              : AppColors.textDark
-                                                  .withValues(alpha: 0.9),
+                                              ? AppColors.textWhite.withValues(
+                                                  alpha: 0.95,
+                                                )
+                                              : AppColors.textDark.withValues(
+                                                  alpha: 0.9,
+                                                ),
                                           fontWeight: FontWeight.w500,
                                           height: 1.2,
                                         ),
@@ -307,7 +370,7 @@ class _LoginPageContentState extends State<_LoginPageContent> {
                                       const Spacer(),
                                       GestureDetector(
                                         onTap: () {
-                                          // TODO: Navigate to forgot password
+                                          _showForgotPasswordDialog();
                                         },
                                         child: Text(
                                           'Forgot Password?',
@@ -349,7 +412,6 @@ class _LoginPageContentState extends State<_LoginPageContent> {
                                   const GoogleLoginRequested(),
                                 );
                               },
-                              
                             ),
                             const SizedBox(height: 16),
                             Row(
@@ -359,10 +421,12 @@ class _LoginPageContentState extends State<_LoginPageContent> {
                                   "Don't have an account? ",
                                   style: TextStyle(
                                     color: isDark
-                                        ? AppColors.textWhite
-                                            .withValues(alpha: 0.8)
-                                        : AppColors.textDark
-                                            .withValues(alpha: 0.8),
+                                        ? AppColors.textWhite.withValues(
+                                            alpha: 0.8,
+                                          )
+                                        : AppColors.textDark.withValues(
+                                            alpha: 0.8,
+                                          ),
                                     fontSize: 14,
                                   ),
                                 ),

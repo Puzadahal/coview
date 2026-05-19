@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_translate/flutter_translate.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:go_router/go_router.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../domain/bloc/home_bloc.dart';
@@ -28,8 +29,9 @@ class _HomeScreenContent extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final isDesktop = width >= 900;
     final useCompactNav = width < 820;
-    final langCode =
-        LocalizedApp.of(context).delegate.currentLocale.languageCode;
+    final langCode = LocalizedApp.of(
+      context,
+    ).delegate.currentLocale.languageCode;
 
     return Scaffold(
       backgroundColor: AppColors.primaryDark,
@@ -45,10 +47,16 @@ class _HomeScreenContent extends StatelessWidget {
         elevation: 0,
         titleSpacing: useCompactNav ? 8 : 16,
         title: useCompactNav
-            ? const Text('SyncView', style: TextStyle(fontWeight: FontWeight.w800))
+            ? const Text(
+                'SyncView',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              )
             : Row(
                 children: [
-                  const Text('SyncView', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const Text(
+                    'SyncView',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                   const SizedBox(width: 16),
                   _NavLink(
                     label: translate('home'),
@@ -70,11 +78,7 @@ class _HomeScreenContent extends StatelessWidget {
                 ],
               ),
         actions: [
-          IconButton(
-            tooltip: translate('profile'),
-            icon: const Icon(Icons.person_outline),
-            onPressed: () => context.go('/profile'),
-          ),
+          _HomeProfileButton(onPressed: () => context.go('/profile')),
           const SizedBox(width: 4),
         ],
       ),
@@ -116,7 +120,9 @@ class _HomeScreenContent extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         translate('trendingSub'),
-                        style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.75),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       const _RecommendationsChips(),
@@ -174,17 +180,29 @@ class _HomeDrawer extends StatelessWidget {
             const Divider(height: 1, color: Color(0x33FFFFFF)),
             ListTile(
               leading: const Icon(Icons.home_outlined, color: Colors.white),
-              title: Text(translate('home'), style: const TextStyle(color: Colors.white)),
+              title: Text(
+                translate('home'),
+                style: const TextStyle(color: Colors.white),
+              ),
               onTap: () => closeThen(() => context.go('/home')),
             ),
             ListTile(
               leading: const Icon(Icons.info_outline, color: Colors.white),
-              title: Text(translate('about'), style: const TextStyle(color: Colors.white)),
+              title: Text(
+                translate('about'),
+                style: const TextStyle(color: Colors.white),
+              ),
               onTap: () => closeThen(() => context.go('/about')),
             ),
             ListTile(
-              leading: const Icon(Icons.recommend_outlined, color: Colors.white),
-              title: Text(translate('recommendations'), style: const TextStyle(color: Colors.white)),
+              leading: const Icon(
+                Icons.recommend_outlined,
+                color: Colors.white,
+              ),
+              title: Text(
+                translate('recommendations'),
+                style: const TextStyle(color: Colors.white),
+              ),
               onTap: () => closeThen(() => context.go('/recommendations')),
             ),
             const Divider(height: 1, color: Color(0x33FFFFFF)),
@@ -210,18 +228,92 @@ class _HomeDrawer extends StatelessWidget {
                   }
                 },
                 activeColor: AppColors.secondary,
-                title: Text(e.value, style: const TextStyle(color: Colors.white)),
+                title: Text(
+                  e.value,
+                  style: const TextStyle(color: Colors.white),
+                ),
               ),
             ),
             const Divider(height: 1, color: Color(0x33FFFFFF)),
             ListTile(
-              leading: const Icon(Icons.person_outline, color: Colors.white),
-              title: Text(translate('profile'), style: const TextStyle(color: Colors.white)),
+              leading: StreamBuilder<fb.User?>(
+                stream: fb.FirebaseAuth.instance.userChanges(),
+                initialData: fb.FirebaseAuth.instance.currentUser,
+                builder: (context, snapshot) {
+                  return _UserAvatar(
+                    photoUrl: snapshot.data?.photoURL,
+                    radius: 12,
+                    backgroundColor: Colors.white24,
+                    iconSize: 16,
+                  );
+                },
+              ),
+              title: Text(
+                translate('profile'),
+                style: const TextStyle(color: Colors.white),
+              ),
               onTap: () => closeThen(() => context.go('/profile')),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _HomeProfileButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _HomeProfileButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<fb.User?>(
+      stream: fb.FirebaseAuth.instance.userChanges(),
+      initialData: fb.FirebaseAuth.instance.currentUser,
+      builder: (context, snapshot) {
+        return IconButton(
+          tooltip: translate('profile'),
+          icon: _UserAvatar(
+            photoUrl: snapshot.data?.photoURL,
+            radius: 14,
+            backgroundColor: Colors.white24,
+            iconSize: 18,
+          ),
+          onPressed: onPressed,
+        );
+      },
+    );
+  }
+}
+
+class _UserAvatar extends StatelessWidget {
+  final String? photoUrl;
+  final double radius;
+  final Color backgroundColor;
+  final double iconSize;
+
+  const _UserAvatar({
+    required this.photoUrl,
+    required this.radius,
+    required this.backgroundColor,
+    required this.iconSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmedPhotoUrl = photoUrl?.trim();
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: backgroundColor,
+      foregroundImage: trimmedPhotoUrl == null || trimmedPhotoUrl.isEmpty
+          ? null
+          : NetworkImage(trimmedPhotoUrl),
+      onForegroundImageError: trimmedPhotoUrl == null || trimmedPhotoUrl.isEmpty
+          ? null
+          : (_, _) {},
+      child: Icon(Icons.person, size: iconSize, color: AppColors.textWhite),
     );
   }
 }
@@ -270,7 +362,10 @@ class _LanguageMenu extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(
           children: [
-            Text('$label: ${langs[current] ?? langs['en']}', style: const TextStyle(color: Colors.white)),
+            Text(
+              '$label: ${langs[current] ?? langs['en']}',
+              style: const TextStyle(color: Colors.white),
+            ),
             const Icon(Icons.arrow_drop_down, color: Colors.white),
           ],
         ),
@@ -370,10 +465,16 @@ class _HeroPreview extends StatelessWidget {
       height: 240,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        gradient: const LinearGradient(colors: [Color(0xFF2E336F), Color(0xFF161A38)]),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2E336F), Color(0xFF161A38)],
+        ),
       ),
       child: const Center(
-        child: Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 64),
+        child: Icon(
+          Icons.play_circle_fill_rounded,
+          color: Colors.white,
+          size: 64,
+        ),
       ),
     );
   }
@@ -478,7 +579,10 @@ class _TextCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),
-      child: Text(text, style: TextStyle(color: Colors.white.withValues(alpha: 0.82))),
+      child: Text(
+        text,
+        style: TextStyle(color: Colors.white.withValues(alpha: 0.82)),
+      ),
     );
   }
 }

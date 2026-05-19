@@ -70,10 +70,28 @@ class VoiceChatEnabledChanged extends CreateRoomEvent {
   List<Object> get props => [enabled];
 }
 
+class VideoCallEnabledChanged extends CreateRoomEvent {
+  final bool enabled;
+
+  const VideoCallEnabledChanged(this.enabled);
+
+  @override
+  List<Object> get props => [enabled];
+}
+
 class VideoBubblesEnabledChanged extends CreateRoomEvent {
   final bool enabled;
 
   const VideoBubblesEnabledChanged(this.enabled);
+
+  @override
+  List<Object> get props => [enabled];
+}
+
+class SensitiveWordsFilterChanged extends CreateRoomEvent {
+  final bool enabled;
+
+  const SensitiveWordsFilterChanged(this.enabled);
 
   @override
   List<Object> get props => [enabled];

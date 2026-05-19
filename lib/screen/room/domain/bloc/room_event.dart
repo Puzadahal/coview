@@ -57,6 +57,18 @@ class RoomPlaybackUpdated extends RoomEvent {
   });
 
   @override
-  List<Object?> get props => [isPlaying, positionSeconds, anchorServerTimeMs, version];
+  List<Object?> get props => [
+    isPlaying,
+    positionSeconds,
+    anchorServerTimeMs,
+    version,
+  ];
 }
 
+class RoomDeleteRequested extends RoomEvent {
+  const RoomDeleteRequested();
+}
+
+class RoomActionMessageConsumed extends RoomEvent {
+  const RoomActionMessageConsumed();
+}

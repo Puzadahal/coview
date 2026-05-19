@@ -9,7 +9,9 @@ class CreateRoomState extends Equatable {
   final int participantLimit;
   final bool textChatEnabled;
   final bool voiceChatEnabled;
+  final bool videoCallEnabled;
   final bool videoBubblesEnabled;
+  final bool sensitiveWordsFilterEnabled;
   final bool isAdvancedSettingsExpanded;
   final bool isUrlValid;
   final String? videoThumbnail;
@@ -26,7 +28,9 @@ class CreateRoomState extends Equatable {
     this.participantLimit = AppConstants.defaultParticipantLimit,
     this.textChatEnabled = true,
     this.voiceChatEnabled = false,
+    this.videoCallEnabled = true,
     this.videoBubblesEnabled = false,
+    this.sensitiveWordsFilterEnabled = true,
     this.isAdvancedSettingsExpanded = false,
     this.isUrlValid = false,
     this.videoThumbnail,
@@ -37,9 +41,9 @@ class CreateRoomState extends Equatable {
   });
 
   bool get isFormValid {
-    return roomName.trim().isNotEmpty && 
-           videoUrl.trim().isNotEmpty && 
-           isUrlValid;
+    return roomName.trim().isNotEmpty &&
+        videoUrl.trim().isNotEmpty &&
+        isUrlValid;
   }
 
   CreateRoomState copyWith({
@@ -50,7 +54,9 @@ class CreateRoomState extends Equatable {
     int? participantLimit,
     bool? textChatEnabled,
     bool? voiceChatEnabled,
+    bool? videoCallEnabled,
     bool? videoBubblesEnabled,
+    bool? sensitiveWordsFilterEnabled,
     bool? isAdvancedSettingsExpanded,
     bool? isUrlValid,
     String? videoThumbnail,
@@ -67,8 +73,12 @@ class CreateRoomState extends Equatable {
       participantLimit: participantLimit ?? this.participantLimit,
       textChatEnabled: textChatEnabled ?? this.textChatEnabled,
       voiceChatEnabled: voiceChatEnabled ?? this.voiceChatEnabled,
+      videoCallEnabled: videoCallEnabled ?? this.videoCallEnabled,
       videoBubblesEnabled: videoBubblesEnabled ?? this.videoBubblesEnabled,
-      isAdvancedSettingsExpanded: isAdvancedSettingsExpanded ?? this.isAdvancedSettingsExpanded,
+      sensitiveWordsFilterEnabled:
+          sensitiveWordsFilterEnabled ?? this.sensitiveWordsFilterEnabled,
+      isAdvancedSettingsExpanded:
+          isAdvancedSettingsExpanded ?? this.isAdvancedSettingsExpanded,
       isUrlValid: isUrlValid ?? this.isUrlValid,
       videoThumbnail: videoThumbnail ?? this.videoThumbnail,
       status: status ?? this.status,
@@ -80,28 +90,24 @@ class CreateRoomState extends Equatable {
 
   @override
   List<Object?> get props => [
-        roomName,
-        videoUrl,
-        isPrivate,
-        hostControlsOnly,
-        participantLimit,
-        textChatEnabled,
-        voiceChatEnabled,
-        videoBubblesEnabled,
-        isAdvancedSettingsExpanded,
-        isUrlValid,
-        videoThumbnail,
-        status,
-        errorMessage,
-        createdRoomId,
-        inviteLink,
-      ];
+    roomName,
+    videoUrl,
+    isPrivate,
+    hostControlsOnly,
+    participantLimit,
+    textChatEnabled,
+    voiceChatEnabled,
+    videoCallEnabled,
+    videoBubblesEnabled,
+    sensitiveWordsFilterEnabled,
+    isAdvancedSettingsExpanded,
+    isUrlValid,
+    videoThumbnail,
+    status,
+    errorMessage,
+    createdRoomId,
+    inviteLink,
+  ];
 }
 
-enum CreateRoomStatus {
-  initial,
-  validating,
-  loading,
-  success,
-  failure,
-}
+enum CreateRoomStatus { initial, validating, loading, success, failure }

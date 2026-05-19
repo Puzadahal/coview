@@ -33,11 +33,7 @@ class AuthMethods {
         'isGuest': false,
       });
 
-      return User.registered(
-        id: firebaseUser.uid,
-        email: email,
-        name: name,
-      );
+      return User.registered(id: firebaseUser.uid, email: email, name: name);
     } on fb.FirebaseAuthException catch (e) {
       switch (e.code) {
         case 'email-already-in-use':
@@ -51,7 +47,9 @@ class AuthMethods {
             'Email/password accounts are disabled for this project. Enable them in Firebase Auth settings.',
           );
         case 'weak-password':
-          throw Exception('The password is too weak. Please choose a stronger one.');
+          throw Exception(
+            'The password is too weak. Please choose a stronger one.',
+          );
         default:
           throw Exception(e.message ?? 'Signup failed. Please try again.');
       }
@@ -74,9 +72,14 @@ class AuthMethods {
         throw Exception('Login failed. Please try again.');
       }
 
-      final doc = await _firestore.collection('users').doc(firebaseUser.uid).get();
+      final doc = await _firestore
+          .collection('users')
+          .doc(firebaseUser.uid)
+          .get();
       final data = doc.data();
-      final name = (data?['name'] as String?) ?? (firebaseUser.email ?? '').split('@').first;
+      final name =
+          (data?['name'] as String?) ??
+          (firebaseUser.email ?? '').split('@').first;
 
       return User.registered(
         id: firebaseUser.uid,
@@ -116,11 +119,25 @@ class AuthMethods {
         idToken: googleAuth.idToken,
       );
 
-      final fb.UserCredential userCredential =
-          await _auth.signInWithCredential(credential);
+      final fb.UserCredential userCredential = await _auth.signInWithCredential(
+        credential,
+      );
 
       final fb.User? firebaseUser = userCredential.user;
       if (firebaseUser == null) return null;
+
+      final googlePhotoUrl = googleUser.photoUrl?.trim();
+      final firebasePhotoUrl = firebaseUser.photoURL?.trim();
+      final photoUrl = (firebasePhotoUrl?.isNotEmpty ?? false)
+          ? firebasePhotoUrl
+          : (googlePhotoUrl?.isNotEmpty ?? false)
+          ? googlePhotoUrl
+          : null;
+
+      if (photoUrl != null && photoUrl != firebasePhotoUrl) {
+        await firebaseUser.updatePhotoURL(photoUrl);
+        await firebaseUser.reload();
+      }
 
       final userDoc = _firestore.collection('users').doc(firebaseUser.uid);
       final snapshot = await userDoc.get();
@@ -130,16 +147,24 @@ class AuthMethods {
           'uid': firebaseUser.uid,
           'email': firebaseUser.email,
           'name': firebaseUser.displayName ?? 'User',
-          'photo': firebaseUser.photoURL,
+          'photo': photoUrl,
           'createdAt': FieldValue.serverTimestamp(),
           'isGuest': false,
         });
+      } else {
+        await userDoc.set({
+          'email': firebaseUser.email,
+          'name': firebaseUser.displayName ?? 'User',
+          'photo': photoUrl,
+          'isGuest': false,
+        }, SetOptions(merge: true));
       }
 
       return User.registered(
         id: firebaseUser.uid,
         email: firebaseUser.email ?? '',
         name: firebaseUser.displayName ?? 'User',
+        avatarUrl: photoUrl,
       );
     } on fb.FirebaseAuthException catch (e) {
       if (e.code == 'account-exists-with-different-credential') {

@@ -7,6 +7,10 @@ import '../../screen/home_screen/presentation/pages/home_screen.dart';
 import '../../screen/home_screen/presentation/pages/about_page.dart';
 import '../../screen/home_screen/presentation/pages/recommendations_page.dart';
 import '../../screen/profile/presentation/pages/profile_page.dart';
+import '../../screen/profile/presentation/pages/edit_profile_page.dart';
+import '../../screen/profile/presentation/pages/change_password_page.dart';
+import '../../screen/profile/presentation/pages/privacy_policy_page.dart';
+import '../../screen/profile/presentation/pages/terms_conditions_page.dart';
 import '../../screen/create_room/presentation/pages/create_room_page.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../screen/room/presentation/pages/room_page.dart';
@@ -64,6 +68,26 @@ final GoRouter appRouter = GoRouter(
       path: '/profile',
       name: 'profile',
       builder: (context, state) => const ProfilePage(),
+    ),
+    GoRoute(
+      path: '/profile/edit',
+      name: 'edit-profile',
+      builder: (context, state) => const EditProfilePage(),
+    ),
+    GoRoute(
+      path: '/profile/change-password',
+      name: 'change-password',
+      builder: (context, state) => const ChangePasswordPage(),
+    ),
+    GoRoute(
+      path: '/profile/privacy-policy',
+      name: 'privacy-policy',
+      builder: (context, state) => const PrivacyPolicyPage(),
+    ),
+    GoRoute(
+      path: '/profile/terms',
+      name: 'terms-conditions',
+      builder: (context, state) => const TermsConditionsPage(),
     ),
     GoRoute(
       path: '/create-room',

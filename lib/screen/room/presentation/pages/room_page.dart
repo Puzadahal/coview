@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/sync/ntp_clock.dart';
@@ -56,6 +58,10 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   bool _youtubeImmersive = false;
   // Non-YouTube: user tapped app fullscreen control.
   bool _manualVideoOnly = false;
+  bool _notifyRecentMessages = true;
+  bool _notifyRoomInvites = true;
+  bool _notifySystemAlerts = true;
+  int _lastKnownMessageCount = 0;
 
   bool get _videoOnlyLayout => _youtubeImmersive || _manualVideoOnly;
 
@@ -64,9 +70,22 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     NtpClock.instance.refresh();
+    unawaited(_loadNotificationPrefs());
     _driftTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       unawaited(_correctDriftOnce());
     });
+  }
+
+  Future<void> _loadNotificationPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _notifyRecentMessages = prefs.getBool('notify_recent_messages') ?? true;
+        _notifyRoomInvites = prefs.getBool('notify_room_invites') ?? true;
+        _notifySystemAlerts = prefs.getBool('notify_system_alerts') ?? true;
+      });
+    } catch (_) {}
   }
 
   @override
@@ -100,38 +119,58 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     if (_isCallConnecting) return;
     _isCallConnecting = true;
     try {
-    await _initializeCallRenderers();
-    if (_callService == null) {
-      _callService = RoomCallService(state.roomId);
-      _remoteStreamSub = _callService!.remoteStreamUpdates.listen((stream) {
-        if (!mounted) return;
-        setState(() {
-          _remoteCallStream = stream;
-          _remoteRenderer.srcObject = stream;
-          _videoBubbleVisible = true;
+      await _initializeCallRenderers();
+      if (_callService == null) {
+        _callService = RoomCallService(state.roomId);
+        _remoteStreamSub = _callService!.remoteStreamUpdates.listen((stream) {
+          if (!mounted) return;
+          setState(() {
+            _remoteCallStream = stream;
+            _remoteRenderer.srcObject = stream;
+            _videoBubbleVisible = true;
+          });
         });
+      }
+      final canJoin = await _callService!.hostOfferExists();
+      if (canJoin) {
+        await _callService!.joinCall();
+      } else {
+        await _callService!.startCall();
+      }
+      if (!mounted) return;
+      setState(() {
+        _localCallStream = _callService!.localStream;
+        _remoteCallStream = _callService!.remoteStream;
+        _localRenderer.srcObject = _localCallStream;
+        _remoteRenderer.srcObject = _remoteCallStream;
+        _videoBubbleVisible = true;
       });
-    }
-    final canJoin = await _callService!.hostOfferExists();
-    if (canJoin) {
-      await _callService!.joinCall();
-    } else {
-      await _callService!.startCall();
-    }
-    if (!mounted) return;
-    setState(() {
-      _localCallStream = _callService!.localStream;
-      _remoteCallStream = _callService!.remoteStream;
-      _localRenderer.srcObject = _localCallStream;
-      _remoteRenderer.srcObject = _remoteCallStream;
-      _videoBubbleVisible = true;
-    });
     } finally {
       _isCallConnecting = false;
     }
   }
 
   Future<void> _toggleCallBubble(RoomState state) async {
+    if (!state.videoCallEnabled) {
+      if (_notifySystemAlerts) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Video call is disabled for this room.'),
+          ),
+        );
+      }
+      return;
+    }
+    if (!state.videoBubblesEnabled) {
+      if (_notifySystemAlerts) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Host disabled video bubbles in room settings.'),
+          ),
+        );
+      }
+      return;
+    }
     try {
       if (_remoteCallStream == null) {
         await _startOrJoinCall(state);
@@ -219,7 +258,8 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     if (anchor <= 0) return false;
     return NtpClock.instance.nowMs >= anchor;
   }
-//Apply playback state from Firestore to local player, unless we already applied this version or there's no remote state. On YouTube we only apply if the anchor time is coherent to avoid seeking into the future.
+
+  //Apply playback state from Firestore to local player, unless we already applied this version or there's no remote state. On YouTube we only apply if the anchor time is coherent to avoid seeking into the future.
   Future<void> _applyPlaybackFromFirestore(
     RoomState state, {
     bool force = false,
@@ -282,7 +322,8 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       vc.setPlaybackSpeed(1.0);
     });
   }
-//Drift correction
+
+  //Drift correction
   Future<void> _correctDriftOnce() async {
     if (!mounted) return;
     final state = context.read<RoomBloc>().state;
@@ -316,8 +357,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       }
       final now = DateTime.now();
       final last = _lastYoutubeDriftSeekWallClock;
-      if (last != null &&
-          now.difference(last) < const Duration(seconds: 5)) {
+      if (last != null && now.difference(last) < const Duration(seconds: 5)) {
         return;
       }
       _lastYoutubeDriftSeekWallClock = now;
@@ -381,6 +421,12 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       resolvedLink: resolved,
       isFullUrl: isFullUrl,
     );
+    if (!context.mounted) return;
+    if (_notifyRoomInvites) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invite options opened.')));
+    }
   }
 
   Future<void> _handleRoomBack(BuildContext context) async {
@@ -443,46 +489,85 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       appBar: videoOnly
           ? null
           : AppBar(
-        backgroundColor: isDark
-            ? AppColors.primaryDarkVariant
-            : AppColors.backgroundWhite,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => unawaited(_handleRoomBack(context)),
-        ),
-        title: BlocBuilder<RoomBloc, RoomState>(
-          builder: (context, state) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  state.roomName ?? 'Coview Room',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              backgroundColor: isDark
+                  ? AppColors.primaryDarkVariant
+                  : AppColors.backgroundWhite,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => unawaited(_handleRoomBack(context)),
+              ),
+              title: BlocBuilder<RoomBloc, RoomState>(
+                builder: (context, state) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        state.roomName ?? 'Coview Room',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        '#${widget.roomId}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.7,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              actions: [
+                BlocBuilder<RoomBloc, RoomState>(
+                  buildWhen: (p, c) => p.hostId != c.hostId,
+                  builder: (context, state) {
+                    final uid = fb.FirebaseAuth.instance.currentUser?.uid;
+                    final isHost = uid != null && state.hostId == uid;
+                    if (!isHost) return const SizedBox.shrink();
+                    return IconButton(
+                      tooltip: 'Delete room',
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Delete Room?'),
+                            content: const Text(
+                              'This will remove the room and delete uploaded video file from storage.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () => Navigator.of(ctx).pop(true),
+                                child: const Text('Delete'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed != true || !context.mounted) return;
+                        context.read<RoomBloc>().add(
+                          const RoomDeleteRequested(),
+                        );
+                      },
+                    );
+                  },
                 ),
-                Text(
-                  '#${widget.roomId}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                  ),
+                IconButton(
+                  tooltip: 'Invite friends',
+                  icon: const Icon(Icons.ios_share),
+                  onPressed: () => unawaited(_inviteFriends(context)),
                 ),
+                const SizedBox(width: 8),
               ],
-            );
-          },
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Invite friends',
-            icon: const Icon(Icons.ios_share),
-            onPressed: () => unawaited(_inviteFriends(context)),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
+            ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -505,12 +590,42 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
             child: BlocListener<RoomBloc, RoomState>(
               listenWhen: (p, c) =>
                   c.status != p.status ||
+                  c.actionMessage != p.actionMessage ||
+                  c.roomDeleted != p.roomDeleted ||
                   c.playbackVersion != p.playbackVersion ||
                   c.isPlaying != p.isPlaying ||
                   c.playbackPositionSeconds != p.playbackPositionSeconds ||
-                  c.playbackAnchorServerTimeMs !=
-                      p.playbackAnchorServerTimeMs,
+                  c.playbackAnchorServerTimeMs != p.playbackAnchorServerTimeMs,
               listener: (context, state) {
+                if (state.actionMessage != null &&
+                    state.actionMessage!.trim().isNotEmpty) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(state.actionMessage!)));
+                  context.read<RoomBloc>().add(
+                    const RoomActionMessageConsumed(),
+                  );
+                }
+                if (state.roomDeleted) {
+                  context.go('/home');
+                  return;
+                }
+                if (state.messages.length > _lastKnownMessageCount &&
+                    _notifyRecentMessages &&
+                    state.messages.isNotEmpty) {
+                  final latest = state.messages.last;
+                  final myUid = fb.FirebaseAuth.instance.currentUser?.uid;
+                  final isMyMessage = myUid != null && myUid == latest.authorId;
+                  if (!isMyMessage) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('${latest.author}: ${latest.text}'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                }
+                _lastKnownMessageCount = state.messages.length;
                 final cameFromLoading =
                     _listenerPrevStatus == RoomStatus.loading &&
                     state.status == RoomStatus.viewing;
@@ -567,8 +682,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                                 IconButton(
                                   tooltip: 'Exit fullscreen',
                                   style: IconButton.styleFrom(
-                                    backgroundColor:
-                                        Colors.black.withValues(alpha: 0.45),
+                                    backgroundColor: Colors.black.withValues(
+                                      alpha: 0.45,
+                                    ),
                                   ),
                                   onPressed: () =>
                                       unawaited(_handleRoomBack(context)),
@@ -580,8 +696,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                                 IconButton(
                                   tooltip: 'Invite friends',
                                   style: IconButton.styleFrom(
-                                    backgroundColor:
-                                        Colors.black.withValues(alpha: 0.45),
+                                    backgroundColor: Colors.black.withValues(
+                                      alpha: 0.45,
+                                    ),
                                   ),
                                   onPressed: () =>
                                       unawaited(_inviteFriends(context)),
@@ -611,6 +728,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                               child: _buildChatPane(
                                 theme,
                                 isDark,
+                                textChatEnabled: state.textChatEnabled,
                                 compactInput: false,
                               ),
                             ),
@@ -628,6 +746,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                               child: _buildChatPane(
                                 theme,
                                 isDark,
+                                textChatEnabled: state.textChatEnabled,
                                 compactInput:
                                     MediaQuery.orientationOf(context) ==
                                         Orientation.landscape &&
@@ -974,84 +1093,85 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
             ),
           ),
           if (!immersive) ...[
-          const SizedBox(height: AppConstants.spacingMedium),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppConstants.spacingSmall,
-              vertical: AppConstants.spacingSmall,
-            ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!_isYouTubeUrl(state.videoUrl ?? ''))
+            const SizedBox(height: AppConstants.spacingMedium),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppConstants.spacingSmall,
+                vertical: AppConstants.spacingSmall,
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!_isYouTubeUrl(state.videoUrl ?? ''))
+                      IconButton(
+                        tooltip: 'Fullscreen video',
+                        onPressed: () =>
+                            setState(() => _manualVideoOnly = true),
+                        icon: const Icon(Icons.fullscreen),
+                      ),
                     IconButton(
-                      tooltip: 'Fullscreen video',
-                      onPressed: () => setState(() => _manualVideoOnly = true),
-                      icon: const Icon(Icons.fullscreen),
+                      onPressed: () => unawaited(_seekRoomBy(state, -10)),
+                      icon: const Icon(Icons.replay_10),
                     ),
-                  IconButton(
-                    onPressed: () => unawaited(_seekRoomBy(state, -10)),
-                    icon: const Icon(Icons.replay_10),
-                  ),
-                  IconButton(
-                    onPressed: () => unawaited(_seekRoomToStart(state)),
-                    icon: const Icon(Icons.skip_previous),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary,
-                      shape: BoxShape.circle,
+                    IconButton(
+                      onPressed: () => unawaited(_seekRoomToStart(state)),
+                      icon: const Icon(Icons.skip_previous),
                     ),
-                    child: IconButton(
-                      onPressed: () => _togglePlayback(state),
-                      icon: Icon(
-                        state.isPlaying ? Icons.pause : Icons.play_arrow,
-                        color: AppColors.textWhite,
+                    Container(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        onPressed: () => _togglePlayback(state),
+                        icon: Icon(
+                          state.isPlaying ? Icons.pause : Icons.play_arrow,
+                          color: AppColors.textWhite,
+                        ),
                       ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: () => unawaited(_seekRoomBy(state, 30)),
-                    icon: const Icon(Icons.skip_next),
-                  ),
-                  IconButton(
-                    onPressed: () => unawaited(_seekRoomBy(state, 10)),
-                    icon: const Icon(Icons.forward_10),
-                  ),
-                  const SizedBox(width: 12),
-                  IconButton(
-                    tooltip: 'Video bubble',
-                    onPressed: () => unawaited(_toggleCallBubble(state)),
-                    icon: Icon(
-                      _videoBubbleVisible
-                          ? Icons.videocam
-                          : Icons.videocam_outlined,
+                    IconButton(
+                      onPressed: () => unawaited(_seekRoomBy(state, 30)),
+                      icon: const Icon(Icons.skip_next),
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: AppConstants.spacingSmall),
-          if (_localCallStream != null && _videoBubbleVisible)
-            Padding(
-              padding: const EdgeInsets.only(
-                left: AppConstants.spacingMedium,
-                right: AppConstants.spacingMedium,
-                bottom: AppConstants.spacingSmall,
-              ),
-              child: SizedBox(
-                height: 120,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    AppConstants.borderRadiusMedium,
-                  ),
-                  child: RTCVideoView(_localRenderer, mirror: true),
+                    IconButton(
+                      onPressed: () => unawaited(_seekRoomBy(state, 10)),
+                      icon: const Icon(Icons.forward_10),
+                    ),
+                    const SizedBox(width: 12),
+                    IconButton(
+                      tooltip: 'Video bubble',
+                      onPressed: () => unawaited(_toggleCallBubble(state)),
+                      icon: Icon(
+                        _videoBubbleVisible
+                            ? Icons.videocam
+                            : Icons.videocam_outlined,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
+            const SizedBox(height: AppConstants.spacingSmall),
+            if (_localCallStream != null && _videoBubbleVisible)
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: AppConstants.spacingMedium,
+                  right: AppConstants.spacingMedium,
+                  bottom: AppConstants.spacingSmall,
+                ),
+                child: SizedBox(
+                  height: 120,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(
+                      AppConstants.borderRadiusMedium,
+                    ),
+                    child: RTCVideoView(_localRenderer, mirror: true),
+                  ),
+                ),
+              ),
           ],
         ],
       ),
@@ -1125,6 +1245,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   Widget _buildChatPane(
     ThemeData theme,
     bool isDark, {
+    required bool textChatEnabled,
     bool compactInput = false,
   }) {
     final headerPadding = compactInput
@@ -1284,10 +1405,13 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
+                    enabled: textChatEnabled,
                     minLines: 1,
                     maxLines: compactInput ? 1 : 3,
                     decoration: InputDecoration(
-                      hintText: 'Say something to the room...',
+                      hintText: textChatEnabled
+                          ? 'Say something to the room...'
+                          : 'Chat disabled by host',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(
                           AppConstants.borderRadiusLarge,
@@ -1306,7 +1430,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                   backgroundColor: theme.colorScheme.primary,
                   child: IconButton(
                     icon: const Icon(Icons.send, color: AppColors.textWhite),
-                    onPressed: _sendMessage,
+                    onPressed: textChatEnabled ? _sendMessage : null,
                   ),
                 ),
               ],

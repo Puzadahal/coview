@@ -117,328 +117,387 @@ class _SignupPageContentState extends State<_SignupPageContent> {
           children: [
             const GlassBackground(),
             SafeArea(
-            child: BlocListener<SignupBloc, SignupState>(
-              listenWhen: (previous, current) => 
-                  previous.status != current.status,
-              listener: (context, state) {
-                debugPrint('[SignupPage] Status changed: ${state.status}');
-                if (state.status == SignupStatus.success) {
-                  debugPrint('[SignupPage] Success! Navigating to login...');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Signup successful! Please login to continue.'),
-                      backgroundColor: Colors.green,
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                  Future.delayed(const Duration(milliseconds: 500), () {
-                    if (context.mounted) {
-                      debugPrint('[SignupPage] Executing navigation to /login');
-                      context.go('/login');
-                    } else {
-                      debugPrint('[SignupPage] Context not mounted, cannot navigate');
-                    }
-                  });
-                } else if (state.status == SignupStatus.failure) {
-                  debugPrint('[SignupPage] Signup failed: ${state.errorMessage}');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(state.errorMessage ?? 'Signup failed'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              },
-              child: SingleChildScrollView(
-                padding: EdgeInsets.only(
-                  left: 20,
-                  right: 20,
-                  top: 24,
-                  bottom: 24 + keyboardHeight,
-                ),
-                child: Column(
-                  children: [
-                    BlocBuilder<SignupBloc, SignupState>(
-                      buildWhen: (p, c) => p.name != c.name,
-                      builder: (context, state) {
-                        return FadeInUp(
-                          delayMs: 0,
-                          child: KineticLogo(
-                            keystrokeTrigger: state.name.length,
-                          ),
+              child: BlocListener<SignupBloc, SignupState>(
+                listenWhen: (previous, current) =>
+                    previous.status != current.status,
+                listener: (context, state) {
+                  debugPrint('[SignupPage] Status changed: ${state.status}');
+                  if (state.status == SignupStatus.success) {
+                    debugPrint('[SignupPage] Success! Navigating to login...');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Signup successful! Please login to continue.',
+                        ),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    Future.delayed(const Duration(milliseconds: 500), () {
+                      if (context.mounted) {
+                        debugPrint(
+                          '[SignupPage] Executing navigation to /login',
                         );
-                      },
-                    ),
-                    const SizedBox(height: 6),
-                    FadeInUp(
-                      delayMs: 50,
-                      child: Text(
-                        'Create your account',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: AppColors.textWhite.withValues(alpha: 0.85),
-                          letterSpacing: 0.5,
+                        context.go('/login');
+                      } else {
+                        debugPrint(
+                          '[SignupPage] Context not mounted, cannot navigate',
+                        );
+                      }
+                    });
+                  } else if (state.status == SignupStatus.failure) {
+                    debugPrint(
+                      '[SignupPage] Signup failed: ${state.errorMessage}',
+                    );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(state.errorMessage ?? 'Signup failed'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.only(
+                    left: 20,
+                    right: 20,
+                    top: 24,
+                    bottom: 24 + keyboardHeight,
+                  ),
+                  child: Column(
+                    children: [
+                      BlocBuilder<SignupBloc, SignupState>(
+                        buildWhen: (p, c) => p.name != c.name,
+                        builder: (context, state) {
+                          return FadeInUp(
+                            delayMs: 0,
+                            child: KineticLogo(
+                              keystrokeTrigger: state.name.length,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 6),
+                      FadeInUp(
+                        delayMs: 50,
+                        child: Text(
+                          'Create your account',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: AppColors.textWhite.withValues(alpha: 0.85),
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    FadeInUp(
-                      delayMs: 100,
-                      child: GlassFormCard(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 18, vertical: 12),
-                        children: [
-                          CustomTextField(
-                            controller: _nameController,
-                            focusNode: _nameFocusNode,
-                            label: 'Name',
-                            hintText: 'Enter your name',
-                            keyboardType: TextInputType.name,
-                            labelColor: AppColors.textWhite.withValues(alpha: 0.95),
-                            onChanged: (value) {
-                              context
-                                  .read<SignupBloc>()
-                                  .add(SignupNameChanged(value));
-                            },
+                      const SizedBox(height: 12),
+                      FadeInUp(
+                        delayMs: 100,
+                        child: GlassFormCard(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 12,
                           ),
-                          const SizedBox(height: 10),
-                          BlocBuilder<SignupBloc, SignupState>(
-                            buildWhen: (p, c) =>
-                                p.email != c.email || p.isEmailValid != c.isEmailValid,
-                            builder: (context, state) {
-                              return EmailFieldWithValidation(
-                                controller: _emailController,
-                                focusNode: _emailFocusNode,
-                                emailValue: state.email,
-                                isEmailValid: state.isEmailValid,
-                                labelColor: AppColors.textWhite.withValues(alpha: 0.95),
-                                onChanged: (value) {
-                                  context
-                                      .read<SignupBloc>()
-                                      .add(SignupEmailChanged(value));
-                                },
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 10),
-                          SignupPasswordTextField(
-                            controller: _passwordController,
-                            focusNode: _passwordFocusNode,
-                            labelColor: AppColors.textWhite.withValues(alpha: 0.95),
-                            onChanged: (value) {
-                              context
-                                  .read<SignupBloc>()
-                                  .add(SignupPasswordChanged(value));
-                            },
-                          ),
-                          const SizedBox(height: 10),
-                          SignupPasswordTextField(
-                            controller: _confirmPasswordController,
-                            focusNode: _confirmPasswordFocusNode,
-                            isConfirmPassword: true,
-                            labelColor: AppColors.textWhite.withValues(alpha: 0.95),
-                            onChanged: (value) {
-                              context
-                                  .read<SignupBloc>()
-                                  .add(SignupConfirmPasswordChanged(value));
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          BlocBuilder<SignupBloc, SignupState>(
-                            buildWhen: (previous, current) =>
-                                previous.password != current.password ||
-                                previous.confirmPassword !=
-                                    current.confirmPassword,
-                            builder: (context, state) {
-                              if (state.confirmPassword.isNotEmpty &&
-                                  state.password.isNotEmpty) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 4),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        state.doPasswordsMatch
-                                            ? Icons.check_circle
-                                            : Icons.error,
-                                        color: state.doPasswordsMatch
-                                            ? AppColors.success
-                                            : AppColors.error,
-                                        size: 16,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        state.doPasswordsMatch
-                                            ? 'Passwords match'
-                                            : 'Passwords do not match',
-                                        style: TextStyle(
-                                          fontSize: 12,
+                          children: [
+                            CustomTextField(
+                              controller: _nameController,
+                              focusNode: _nameFocusNode,
+                              label: 'Name',
+                              hintText: 'Enter your name',
+                              keyboardType: TextInputType.name,
+                              labelColor: AppColors.textWhite.withValues(
+                                alpha: 0.95,
+                              ),
+                              onChanged: (value) {
+                                context.read<SignupBloc>().add(
+                                  SignupNameChanged(value),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 10),
+                            BlocBuilder<SignupBloc, SignupState>(
+                              buildWhen: (p, c) =>
+                                  p.email != c.email ||
+                                  p.isEmailValid != c.isEmailValid,
+                              builder: (context, state) {
+                                return EmailFieldWithValidation(
+                                  controller: _emailController,
+                                  focusNode: _emailFocusNode,
+                                  emailValue: state.email,
+                                  isEmailValid: state.isEmailValid,
+                                  labelColor: AppColors.textWhite.withValues(
+                                    alpha: 0.95,
+                                  ),
+                                  onChanged: (value) {
+                                    context.read<SignupBloc>().add(
+                                      SignupEmailChanged(value),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 10),
+                            SignupPasswordTextField(
+                              controller: _passwordController,
+                              focusNode: _passwordFocusNode,
+                              labelColor: AppColors.textWhite.withValues(
+                                alpha: 0.95,
+                              ),
+                              onChanged: (value) {
+                                context.read<SignupBloc>().add(
+                                  SignupPasswordChanged(value),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 10),
+                            SignupPasswordTextField(
+                              controller: _confirmPasswordController,
+                              focusNode: _confirmPasswordFocusNode,
+                              isConfirmPassword: true,
+                              labelColor: AppColors.textWhite.withValues(
+                                alpha: 0.95,
+                              ),
+                              onChanged: (value) {
+                                context.read<SignupBloc>().add(
+                                  SignupConfirmPasswordChanged(value),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            BlocBuilder<SignupBloc, SignupState>(
+                              buildWhen: (previous, current) =>
+                                  previous.password != current.password ||
+                                  previous.confirmPassword !=
+                                      current.confirmPassword,
+                              builder: (context, state) {
+                                if (state.confirmPassword.isNotEmpty &&
+                                    state.password.isNotEmpty) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          state.doPasswordsMatch
+                                              ? Icons.check_circle
+                                              : Icons.error,
                                           color: state.doPasswordsMatch
                                               ? AppColors.success
                                               : AppColors.error,
+                                          size: 16,
                                         ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          state.doPasswordsMatch
+                                              ? 'Passwords match'
+                                              : 'Passwords do not match',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: state.doPasswordsMatch
+                                                ? AppColors.success
+                                                : AppColors.error,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                            const SizedBox(height: 6),
+                            BlocBuilder<SignupBloc, SignupState>(
+                              buildWhen: (p, c) =>
+                                  p.agreedToTerms != c.agreedToTerms,
+                              builder: (context, state) {
+                                return Theme(
+                                  data: Theme.of(context).copyWith(
+                                    checkboxTheme: CheckboxThemeData(
+                                      fillColor:
+                                          MaterialStateProperty.resolveWith<
+                                            Color
+                                          >((Set<MaterialState> states) {
+                                            if (states.contains(
+                                              MaterialState.selected,
+                                            )) {
+                                              return AppColors.primaryDark;
+                                            }
+                                            return AppColors.textWhite
+                                                .withValues(alpha: 0.4);
+                                          }),
+                                      checkColor: MaterialStateProperty.all(
+                                        AppColors.textWhite,
                                       ),
-                                    ],
-                                  ),
-                                );
-                              }
-                              return const SizedBox.shrink();
-                            },
-                          ),
-                          const SizedBox(height: 6),
-                          BlocBuilder<SignupBloc, SignupState>(
-                            buildWhen: (p, c) => p.agreedToTerms != c.agreedToTerms,
-                            builder: (context, state) {
-                              return Theme(
-                                data: Theme.of(context).copyWith(
-                                  checkboxTheme: CheckboxThemeData(
-                                    fillColor: MaterialStateProperty.resolveWith<Color>((Set<MaterialState> states) {
-                                      if (states.contains(MaterialState.selected)) {
-                                        return AppColors.primaryDark;
-                                      }
-                                      return AppColors.textWhite.withValues(alpha: 0.4);
-                                    }),
-                                    checkColor: MaterialStateProperty.all(AppColors.textWhite),
-                                    side: BorderSide(
-                                      color: AppColors.textWhite.withValues(alpha: 0.8),
-                                      width: 2,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                  ),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.only(bottom: 6),
-                                  child: CheckboxListTile(
-                                    value: state.agreedToTerms,
-                                    onChanged: (v) {
-                                      context.read<SignupBloc>().add(
-                                          SignupAgreedToTermsChanged(v ?? false));
-                                    },
-                                    title: Text.rich(
-                                      TextSpan(
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: AppColors.textWhite.withValues(alpha: 0.95),
+                                      side: BorderSide(
+                                        color: AppColors.textWhite.withValues(
+                                          alpha: 0.8,
                                         ),
-                                        children: [
-                                          const TextSpan(text: 'I agree to the '),
-                                          TextSpan(
-                                            text: 'Terms of Service',
-                                            style: TextStyle(
-                                              color: AppColors.info,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                          const TextSpan(text: ' and '),
-                                          TextSpan(
-                                            text: 'Privacy Policy',
-                                            style: TextStyle(
-                                              color: AppColors.info,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
+                                        width: 2,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(4),
                                       ),
                                     ),
-                                    controlAffinity: ListTileControlAffinity.leading,
-                                    contentPadding: EdgeInsets.zero,
-                                    dense: true,
-                                    activeColor: AppColors.primaryDark,
-                                    tileColor: Colors.transparent,
                                   ),
-                                ),
-                              );
-                            },
-                          ),
-                          BlocBuilder<SignupBloc, SignupState>(
-                            builder: (context, state) {
-                              return CustomButton(
-                                text: 'Sign Up',
-                                height: AppConstants.buttonHeightMedium + 4,
-                                isLoading:
-                                    state.status == SignupStatus.loading,
-                                onPressed: state.isFormValid
-                                    ? () {
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: CheckboxListTile(
+                                      value: state.agreedToTerms,
+                                      onChanged: (v) {
                                         context.read<SignupBloc>().add(
-                                            const SignupButtonPressed());
-                                      }
-                                    : () {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              _getValidationMessage(state),
-                                            ),
-                                            backgroundColor: Colors.orange,
-                                            duration: const Duration(seconds: 2),
+                                          SignupAgreedToTermsChanged(
+                                            v ?? false,
                                           ),
                                         );
                                       },
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 6),
-                          Center(
-                            child: GestureDetector(
-                              onTap: () {
-                                // TODO: Magic link / passkey
-                              },
-                              child: Text(
-                                'Sign up with magic link',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.info,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          const SizedBox(height: 18),
-                          SocialAuthButtons(
-                            onGooglePressed: () {},
-                           
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                'Already have an account? ',
-                                style: TextStyle(
-                                  color: AppColors.textWhite.withValues(alpha: 0.8),
-                                  fontSize: 14,
-                                ),
-                              ),
-                              GestureDetector(
-                                onTap: () => context.go('/login'),
-                                child: const Padding(
-                                  padding: EdgeInsets.symmetric(
-                                      vertical: 8, horizontal: 4),
-                                  child: Text(
-                                    'Login',
-                                    style: TextStyle(
-                                      color: AppColors.textWhite,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
+                                      title: Text.rich(
+                                        TextSpan(
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: AppColors.textWhite
+                                                .withValues(alpha: 0.95),
+                                          ),
+                                          children: [
+                                            const TextSpan(
+                                              text: 'I agree to the ',
+                                            ),
+                                            TextSpan(
+                                              text: 'Terms of Service',
+                                              style: TextStyle(
+                                                color: AppColors.info,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const TextSpan(text: ' and '),
+                                            TextSpan(
+                                              text: 'Privacy Policy',
+                                              style: TextStyle(
+                                                color: AppColors.info,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                      contentPadding: EdgeInsets.zero,
+                                      dense: true,
+                                      activeColor: AppColors.primaryDark,
+                                      tileColor: Colors.transparent,
                                     ),
+                                  ),
+                                );
+                              },
+                            ),
+                            BlocBuilder<SignupBloc, SignupState>(
+                              builder: (context, state) {
+                                return CustomButton(
+                                  text: 'Sign Up',
+                                  height: AppConstants.buttonHeightMedium + 4,
+                                  isLoading:
+                                      state.status == SignupStatus.loading,
+                                  onPressed: state.isFormValid
+                                      ? () {
+                                          context.read<SignupBloc>().add(
+                                            const SignupButtonPressed(),
+                                          );
+                                        }
+                                      : () {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                _getValidationMessage(state),
+                                              ),
+                                              backgroundColor: Colors.orange,
+                                              duration: const Duration(
+                                                seconds: 2,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 6),
+                            Center(
+                              child: GestureDetector(
+                                onTap: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Magic link sign-in is not set up for this build. Use email/password or sign in with Google on the login screen.',
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: Text(
+                                  'Sign up with magic link',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.info,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                        ],
+                            ),
+                            const SizedBox(height: 8),
+                            const SizedBox(height: 18),
+                            SocialAuthButtons(
+                              onGooglePressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Google sign-up: use the Login page and choose Google, then complete sign-up there.',
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'Already have an account? ',
+                                  style: TextStyle(
+                                    color: AppColors.textWhite.withValues(
+                                      alpha: 0.8,
+                                    ),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () => context.go('/login'),
+                                  child: const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      vertical: 8,
+                                      horizontal: 4,
+                                    ),
+                                    child: Text(
+                                      'Login',
+                                      style: TextStyle(
+                                        color: AppColors.textWhite,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
 }
