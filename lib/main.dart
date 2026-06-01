@@ -6,6 +6,7 @@ import 'package:flutter_translate/flutter_translate.dart';
 import 'package:coview/config/routes/app_router.dart';
 import 'package:coview/config/theme/app_theme.dart';
 import 'package:coview/core/language/translate_preferences.dart';
+import 'package:coview/core/notifications/notification_service.dart';
 import 'package:coview/core/theme/domain/bloc/theme_bloc.dart';
 import 'package:coview/core/theme/domain/bloc/theme_event.dart';
 import 'package:coview/core/theme/domain/bloc/theme_state.dart';
@@ -16,6 +17,7 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await NotificationService.instance.initialize();
 
   final delegate = await LocalizationDelegate.create(
     fallbackLocale: 'en',

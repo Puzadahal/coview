@@ -199,6 +199,14 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
           sensitiveWordsFilterEnabled: sensitiveWordsFilterEnabled,
         ),
       );
+
+      await _registerParticipant(
+        user: user,
+        roomId: state.roomId,
+        roomName: name,
+        videoUrl: videoUrl,
+        hostId: hostId,
+      );
     } catch (e) {
       emit(
         state.copyWith(
@@ -206,6 +214,49 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
           error: 'Failed to load room. Please try again.',
         ),
       );
+    }
+  }
+
+  Future<void> _registerParticipant({
+    required fb.User? user,
+    required String roomId,
+    required String roomName,
+    required String? videoUrl,
+    required String? hostId,
+  }) async {
+    if (user == null || user.isAnonymous) return;
+
+    final displayName = (user.displayName?.trim().isNotEmpty ?? false)
+        ? user.displayName!.trim()
+        : (user.email ?? 'User');
+
+    try {
+      await _firestore
+          .collection('rooms')
+          .doc(roomId)
+          .collection('participants')
+          .doc(user.uid)
+          .set({
+        'uid': user.uid,
+        'displayName': displayName,
+        'lastSeenAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      final isHost = hostId != null && hostId == user.uid;
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('rooms')
+          .doc(roomId)
+          .set({
+        'roomId': roomId,
+        'name': roomName,
+        'videoUrl': videoUrl ?? '',
+        'isHost': isHost,
+        'lastJoinedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e, st) {
+      debugPrint('RoomBloc: participant registration failed: $e\n$st');
     }
   }
 

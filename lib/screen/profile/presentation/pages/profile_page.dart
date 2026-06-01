@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../config/colors/app_colors.dart';
+import '../../../../core/notifications/notification_preferences.dart';
+import '../../../../core/notifications/notification_service.dart';
 import '../../../../core/widgets/theme_toggle_button.dart';
 import '../../../../core/theme/domain/bloc/theme_bloc.dart';
 import '../../../../core/theme/domain/bloc/theme_state.dart';
@@ -19,9 +21,8 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  bool _notifyRecentMessages = true;
-  bool _notifyRoomInvites = true;
-  bool _notifySystemAlerts = true;
+  NotificationPreferences _prefs = const NotificationPreferences();
+  bool _loadingPrefs = true;
   String _appVersion = '1.0.0';
 
   @override
@@ -32,21 +33,26 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _loadSettings() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs =
+          await NotificationService.instance.loadPreferencesForUi();
       final pkg = await PackageInfo.fromPlatform();
       if (!mounted) return;
       setState(() {
-        _notifyRecentMessages = prefs.getBool('notify_recent_messages') ?? true;
-        _notifyRoomInvites = prefs.getBool('notify_room_invites') ?? true;
-        _notifySystemAlerts = prefs.getBool('notify_system_alerts') ?? true;
+        _prefs = prefs;
+        _loadingPrefs = false;
         _appVersion = '${pkg.version}+${pkg.buildNumber}';
       });
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) setState(() => _loadingPrefs = false);
+    }
   }
 
-  Future<void> _saveNotificationSetting(String key, bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(key, value);
+  Future<void> _updatePref(
+    NotificationPreferences Function(NotificationPreferences) update,
+  ) async {
+    final next = update(_prefs);
+    setState(() => _prefs = next);
+    await NotificationService.instance.updatePreferences(next);
   }
 
   @override
@@ -255,25 +261,60 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                       ListTile(
                         leading: Icon(
-                          Icons.notifications,
+                          Icons.notifications_active_outlined,
                           color: theme.colorScheme.primary,
                         ),
                         title: Text(
-                          'Notifications',
+                          'In-app alerts',
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        trailing: Switch(
-                          value: _notifyRecentMessages,
-                          onChanged: (value) {
-                            setState(() => _notifyRecentMessages = value);
-                            _saveNotificationSetting(
-                              'notify_recent_messages',
-                              value,
-                            );
-                          },
+                        subtitle: Text(
+                          'Show alerts while you are using SyncView',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.65,
+                            ),
+                          ),
                         ),
+                        trailing: _loadingPrefs
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Switch(
+                                value: _prefs.pushEnabled,
+                                onChanged: (value) => _updatePref(
+                                  (p) => p.copyWith(pushEnabled: value),
+                                ),
+                              ),
+                      ),
+                      Divider(
+                        height: 1,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.1,
+                        ),
+                      ),
+                      SwitchListTile(
+                        secondary: Icon(
+                          Icons.chat_bubble_outline,
+                          color: theme.colorScheme.primary,
+                        ),
+                        title: Text(
+                          'Room messages',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: const Text('Chat activity in your watch rooms'),
+                        value: _prefs.messageNotifications,
+                        onChanged: _loadingPrefs || !_prefs.pushEnabled
+                            ? null
+                            : (value) => _updatePref(
+                                  (p) => p.copyWith(messageNotifications: value),
+                                ),
                       ),
                       Divider(
                         height: 1,
@@ -292,14 +333,13 @@ class _ProfilePageState extends State<ProfilePage> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        value: _notifyRoomInvites,
-                        onChanged: (value) {
-                          setState(() => _notifyRoomInvites = value);
-                          _saveNotificationSetting(
-                            'notify_room_invites',
-                            value,
-                          );
-                        },
+                        value: _prefs.roomInviteNotifications,
+                        onChanged: _loadingPrefs || !_prefs.pushEnabled
+                            ? null
+                            : (value) => _updatePref(
+                                  (p) =>
+                                      p.copyWith(roomInviteNotifications: value),
+                                ),
                       ),
                       Divider(
                         height: 1,
@@ -318,14 +358,12 @@ class _ProfilePageState extends State<ProfilePage> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        value: _notifySystemAlerts,
-                        onChanged: (value) {
-                          setState(() => _notifySystemAlerts = value);
-                          _saveNotificationSetting(
-                            'notify_system_alerts',
-                            value,
-                          );
-                        },
+                        value: _prefs.systemAlerts,
+                        onChanged: _loadingPrefs || !_prefs.pushEnabled
+                            ? null
+                            : (value) => _updatePref(
+                                  (p) => p.copyWith(systemAlerts: value),
+                                ),
                       ),
                     ],
                   ),

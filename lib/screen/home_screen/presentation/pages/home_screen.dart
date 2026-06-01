@@ -7,6 +7,7 @@ import '../../../../config/colors/app_colors.dart';
 import '../../domain/bloc/home_bloc.dart';
 import '../../domain/bloc/home_event.dart';
 import '../../domain/bloc/home_state.dart';
+import '../widgets/movie_recommendations_section.dart';
 import '../widgets/previous_rooms_section.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -108,14 +109,6 @@ class _HomeScreenContent extends StatelessWidget {
                         secondaryCta: translate('joinExisting'),
                       ),
                       const SizedBox(height: 28),
-                      _SimpleHeader(title: translate('howItWorks')),
-                      const SizedBox(height: 14),
-                      const _HowCards(),
-                      const SizedBox(height: 28),
-                      _SimpleHeader(title: translate('aboutTitle')),
-                      const SizedBox(height: 12),
-                      _TextCard(text: translate('aboutDesc')),
-                      const SizedBox(height: 28),
                       _SimpleHeader(title: translate('trending')),
                       const SizedBox(height: 4),
                       Text(
@@ -125,9 +118,13 @@ class _HomeScreenContent extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      const _RecommendationsChips(),
+                      const MovieRecommendationsSection(),
                       const SizedBox(height: 28),
                       const PreviousRoomsSection(),
+                      const SizedBox(height: 28),
+                      _SimpleHeader(title: translate('aboutTitle')),
+                      const SizedBox(height: 12),
+                      _TextCard(text: translate('aboutDesc')),
                       const SizedBox(height: 20),
                       _Footer(tagline: translate('footer')),
                     ],
@@ -502,71 +499,6 @@ class _SimpleHeader extends StatelessWidget {
   }
 }
 
-class _HowCards extends StatelessWidget {
-  const _HowCards();
-  @override
-  Widget build(BuildContext context) {
-    final cards = [
-      ('1', translate('how1_title'), translate('how1_body')),
-      ('2', translate('how2_title'), translate('how2_body')),
-      ('3', translate('how3_title'), translate('how3_body')),
-    ];
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cardW = (constraints.maxWidth - 14).clamp(200.0, 320.0);
-        return Wrap(
-          spacing: 14,
-          runSpacing: 14,
-          children: cards
-              .map(
-                (c) => SizedBox(
-                  width: cardW,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF191D44),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.12),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          c.$1,
-                          style: const TextStyle(
-                            color: AppColors.secondary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          c.$2,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          c.$3,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.78),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              )
-              .toList(),
-        );
-      },
-    );
-  }
-}
-
 class _TextCard extends StatelessWidget {
   final String text;
   const _TextCard({required this.text});
@@ -583,31 +515,6 @@ class _TextCard extends StatelessWidget {
         text,
         style: TextStyle(color: Colors.white.withValues(alpha: 0.82)),
       ),
-    );
-  }
-}
-
-class _RecommendationsChips extends StatelessWidget {
-  const _RecommendationsChips();
-  @override
-  Widget build(BuildContext context) {
-    const picks = ['Dune: Part Two', 'Shogun', '3 Body Problem', 'Fallout'];
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: picks
-          .map(
-            (p) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF191D44),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-              ),
-              child: Text(p, style: const TextStyle(color: Colors.white)),
-            ),
-          )
-          .toList(),
     );
   }
 }

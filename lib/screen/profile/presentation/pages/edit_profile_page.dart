@@ -254,6 +254,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
           'notifyOnNewDeviceLogin': _notifyNewDeviceLogin,
           'roomInviteNotifications': _notifyRoomInvites,
           'messageNotifications': _notifyMessages,
+          'systemAlerts': true,
           'notificationChannels': ['push', 'inApp'],
         },
       }, SetOptions(merge: true));
