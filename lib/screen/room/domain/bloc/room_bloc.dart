@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:firebase_storage/firebase_storage.dart';
+import '../../../../core/moderation/chat_moderation.dart';
 import 'room_event.dart';
 import 'room_state.dart';
 
@@ -19,6 +20,7 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
     on<RoomPlaybackUpdated>(_onPlaybackUpdated);
     on<RoomDeleteRequested>(_onRoomDeleteRequested);
     on<RoomActionMessageConsumed>(_onActionMessageConsumed);
+    on<RoomMessageReported>(_onMessageReported);
   }
 
   late final FirebaseFirestore _firestore;
@@ -27,15 +29,6 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _playbackSub;
 
   DateTime? _guestChatSessionStart;
-  static final RegExp _wordBoundary = RegExp(r'(^|[^a-zA-Z0-9])');
-  static const List<String> _sensitiveWords = [
-    'abuse',
-    'nude',
-    'porn',
-    'kill',
-    'suicide',
-    'hate',
-  ];
 
   bool _isGuestForChatSession(fb.User? user) =>
       user == null || user.isAnonymous;
@@ -138,6 +131,7 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
                   createdAt = ts.toDate();
                 }
                 return RoomMessage(
+                  id: doc.id,
                   author: (data['author'] as String?) ?? 'Guest',
                   authorId: data['authorId'] as String?,
                   text: (data['text'] as String?) ?? '',
@@ -268,9 +262,22 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
 
     final trimmed = event.text.trim();
     if (trimmed.isEmpty) return;
-    final sanitized = state.sensitiveWordsFilterEnabled
-        ? _sanitizeSensitiveContent(trimmed)
-        : trimmed;
+
+    final moderation = ChatModeration.moderate(
+      trimmed,
+      enabled: state.sensitiveWordsFilterEnabled,
+    );
+
+    if (moderation.wasBlocked) {
+      emit(
+        state.copyWith(
+          actionMessage:
+              moderation.blockReason ??
+              'This message was blocked by chat moderation.',
+        ),
+      );
+      return;
+    }
 
     final user = _auth.currentUser;
     final authorName = (user?.displayName?.trim().isNotEmpty ?? false)
@@ -282,11 +289,74 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
         .doc(state.roomId)
         .collection('messages')
         .add({
-          'text': sanitized,
+          'text': moderation.text,
           'author': authorName,
           'authorId': user?.uid,
           'createdAt': FieldValue.serverTimestamp(),
+          'filtered': moderation.hadFilteredWords,
         });
+
+    if (moderation.hadFilteredWords) {
+      emit(
+        state.copyWith(
+          actionMessage:
+              'Some words were filtered. Please keep chat respectful.',
+        ),
+      );
+    }
+  }
+
+  Future<void> _onMessageReported(
+    RoomMessageReported event,
+    Emitter<RoomState> emit,
+  ) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      emit(state.copyWith(actionMessage: 'Please sign in to report messages.'));
+      return;
+    }
+
+    if (event.reportedAuthorId != null &&
+        event.reportedAuthorId == user.uid) {
+      emit(state.copyWith(actionMessage: 'You cannot report your own message.'));
+      return;
+    }
+
+    try {
+      final reporterName = (user.displayName?.trim().isNotEmpty ?? false)
+          ? user.displayName!.trim()
+          : (user.email ?? 'User');
+
+      await _firestore
+          .collection('rooms')
+          .doc(state.roomId)
+          .collection('reports')
+          .add({
+            'messageId': event.messageId,
+            'messageText': event.messageText,
+            'reportedAuthor': event.reportedAuthor,
+            'reportedAuthorId': event.reportedAuthorId,
+            'reason': event.reason,
+            'reporterId': user.uid,
+            'reporterName': reporterName,
+            'createdAt': FieldValue.serverTimestamp(),
+            'status': 'open',
+          });
+
+      emit(
+        state.copyWith(
+          actionMessage:
+              'Report submitted. The room host will be able to review it.',
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('RoomBloc: report message failed: $e\n$st');
+      emit(
+        state.copyWith(
+          actionMessage: 'Could not submit report. Please try again.',
+        ),
+      );
+    }
   }
 
   void _onMessagesUpdated(RoomMessagesUpdated event, Emitter<RoomState> emit) {
@@ -422,22 +492,6 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
     final host = uri.host.toLowerCase();
     return host.contains('firebasestorage.googleapis.com') ||
         host.contains('storage.googleapis.com');
-  }
-
-  String _sanitizeSensitiveContent(String value) {
-    var output = value;
-    for (final word in _sensitiveWords) {
-      final pattern = RegExp(
-        '${_wordBoundary.pattern}${RegExp.escape(word)}(?=\$|[^a-zA-Z0-9])',
-        caseSensitive: false,
-      );
-      output = output.replaceAllMapped(pattern, (match) {
-        final prefix = match.group(1) ?? '';
-        final masked = '*' * word.length;
-        return '$prefix$masked';
-      });
-    }
-    return output;
   }
 
   @override

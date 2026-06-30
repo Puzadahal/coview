@@ -3,10 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/storage/storage_upload_service.dart';
 import '../../../../core/widgets/glass_form_card.dart';
 import '../../domain/bloc/create_room_bloc.dart';
 import '../../domain/bloc/create_room_event.dart';
@@ -236,6 +237,7 @@ class _VideoUrlField extends StatefulWidget {
 
 class _VideoUrlFieldState extends State<_VideoUrlField> {
   late final TextEditingController _controller;
+  final _uploadService = StorageUploadService();
   bool _isUploading = false;
   double _uploadProgress = 0;
 
@@ -260,7 +262,7 @@ class _VideoUrlFieldState extends State<_VideoUrlField> {
       final picked = await FilePicker.pickFiles(
         type: FileType.custom,
         allowMultiple: false,
-        withData: true,
+        withData: kIsWeb,
         allowedExtensions: const ['mp4', 'mkv', 'mov', 'avi', 'wmv', 'webm'],
       );
       final file = (picked != null && picked.files.isNotEmpty)
@@ -268,30 +270,31 @@ class _VideoUrlFieldState extends State<_VideoUrlField> {
           : null;
       if (file == null) return;
 
-      final bytes = file.bytes;
-      if (bytes == null || bytes.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not read file bytes for upload. Try a smaller file or paste a public URL.',
-            ),
-          ),
-        );
-        return;
-      }
-
       setState(() {
         _isUploading = true;
         _uploadProgress = 0;
       });
-      final publicUrl = await _uploadToStorage(file, bytes);
+      final publicUrl = await _uploadService.uploadRoomVideo(
+        file,
+        onProgress: (progress) {
+          if (!mounted) return;
+          setState(() => _uploadProgress = progress);
+        },
+      );
 
       if (!mounted) return;
       _controller.text = publicUrl;
       context.read<CreateRoomBloc>().add(VideoUrlChanged(publicUrl));
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Upload complete. Public link added.')),
+      );
+    } on fb.FirebaseException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(StorageUploadService.friendlyMessage(e)),
+          duration: const Duration(seconds: 5),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -305,69 +308,6 @@ class _VideoUrlFieldState extends State<_VideoUrlField> {
           _uploadProgress = 0;
         });
       }
-    }
-  }
-
-  Future<String> _uploadToStorage(PlatformFile file, Uint8List bytes) async {
-    var user = fb.FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      final cred = await fb.FirebaseAuth.instance.signInAnonymously();
-      user = cred.user;
-    }
-    if (user == null) {
-      throw Exception('User auth unavailable for upload.');
-    }
-
-    final originalName = (file.name.isNotEmpty ? file.name : 'video.mp4')
-        .replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-    final ext = _extensionOf(originalName);
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final storagePath =
-        'room_uploads/${user.uid}/$timestamp-${timestamp % 1000}.$ext';
-
-    final metadata = SettableMetadata(
-      contentType: _contentTypeForExtension(ext),
-      customMetadata: {'originalName': originalName},
-    );
-    final ref = FirebaseStorage.instance.ref().child(storagePath);
-    final task = ref.putData(bytes, metadata);
-
-    task.snapshotEvents.listen((snapshot) {
-      if (!mounted) return;
-      final total = snapshot.totalBytes;
-      if (total <= 0) return;
-      setState(() {
-        _uploadProgress = snapshot.bytesTransferred / total;
-      });
-    });
-
-    await task;
-    return ref.getDownloadURL();
-  }
-
-  String _extensionOf(String fileName) {
-    final dot = fileName.lastIndexOf('.');
-    if (dot == -1 || dot == fileName.length - 1) return 'mp4';
-    return fileName.substring(dot + 1).toLowerCase();
-  }
-
-  String _contentTypeForExtension(String ext) {
-    switch (ext) {
-      case 'm3u8':
-        return 'application/vnd.apple.mpegurl';
-      case 'webm':
-        return 'video/webm';
-      case 'mov':
-        return 'video/quicktime';
-      case 'avi':
-        return 'video/x-msvideo';
-      case 'wmv':
-        return 'video/x-ms-wmv';
-      case 'mkv':
-        return 'video/x-matroska';
-      case 'mp4':
-      default:
-        return 'video/mp4';
     }
   }
 
@@ -414,7 +354,7 @@ class _VideoUrlFieldState extends State<_VideoUrlField> {
               },
               decoration: InputDecoration(
                 hintText:
-                    'Paste YouTube / Vimeo / Dailymotion / Twitch / direct HTTP video URL',
+                    'Paste any video or webpage URL (YouTube, news, blogs, .mp4…)',
                 hintStyle: TextStyle(
                   color: isDark
                       ? AppColors.textWhite.withValues(alpha: 0.5)

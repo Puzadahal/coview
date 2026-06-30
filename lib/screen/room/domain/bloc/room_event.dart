@@ -72,3 +72,28 @@ class RoomDeleteRequested extends RoomEvent {
 class RoomActionMessageConsumed extends RoomEvent {
   const RoomActionMessageConsumed();
 }
+
+class RoomMessageReported extends RoomEvent {
+  final String messageId;
+  final String messageText;
+  final String reportedAuthor;
+  final String? reportedAuthorId;
+  final String reason;
+
+  const RoomMessageReported({
+    required this.messageId,
+    required this.messageText,
+    required this.reportedAuthor,
+    this.reportedAuthorId,
+    required this.reason,
+  });
+
+  @override
+  List<Object?> get props => [
+    messageId,
+    messageText,
+    reportedAuthor,
+    reportedAuthorId,
+    reason,
+  ];
+}

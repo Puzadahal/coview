@@ -5,20 +5,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/moderation/chat_moderation.dart';
+import '../../../../core/permissions/call_permissions.dart';
 import '../../../../core/sync/ntp_clock.dart';
 import '../../../../core/sync/playback_sync_math.dart';
 import '../../../../core/utils/invite_link.dart';
+import '../../../../core/video/video_url_classifier.dart';
+import '../../../../core/video/web_video_resolver.dart';
 import '../../domain/bloc/room_bloc.dart';
 import '../../domain/bloc/room_event.dart';
 import '../../domain/bloc/room_state.dart';
+import '../widgets/chat_message_bubble.dart';
+import '../widgets/report_message_dialog.dart';
 import '../widgets/room_share_sheet.dart';
+import '../widgets/web_page_player_view.dart';
 import '../widgets/youtube_player_view.dart';
 import '../../domain/room_call_service.dart';
 
@@ -36,8 +43,14 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   VideoPlayerController? _videoController;
   Future<void>? _initializeVideoFuture;
   String? _currentVideoUrl;
+  String? _preparedSourceUrl;
+  VideoPlaybackKind _playbackKind = VideoPlaybackKind.unsupported;
+  bool _resolvingPlayback = false;
+  final WebVideoResolver _webVideoResolver = WebVideoResolver();
   final GlobalKey<YoutubePlayerViewState> _youtubeKey =
       GlobalKey<YoutubePlayerViewState>();
+  final GlobalKey<WebPagePlayerViewState> _webPageKey =
+      GlobalKey<WebPagePlayerViewState>();
   RoomCallService? _callService;
   StreamSubscription<MediaStream>? _remoteStreamSub;
   MediaStream? _localCallStream;
@@ -126,7 +139,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
           if (!mounted) return;
           setState(() {
             _remoteCallStream = stream;
-            _remoteRenderer.srcObject = stream;
+            if (_renderersInitialized) {
+              _remoteRenderer.srcObject = stream;
+            }
             _videoBubbleVisible = true;
           });
         });
@@ -141,10 +156,15 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       setState(() {
         _localCallStream = _callService!.localStream;
         _remoteCallStream = _callService!.remoteStream;
-        _localRenderer.srcObject = _localCallStream;
-        _remoteRenderer.srcObject = _remoteCallStream;
+        if (_renderersInitialized) {
+          _localRenderer.srcObject = _localCallStream;
+          _remoteRenderer.srcObject = _remoteCallStream;
+        }
         _videoBubbleVisible = true;
       });
+    } catch (e, st) {
+      debugPrint('RoomPage: video call failed: $e\n$st');
+      rethrow;
     } finally {
       _isCallConnecting = false;
     }
@@ -161,30 +181,33 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       }
       return;
     }
-    if (!state.videoBubblesEnabled) {
-      if (_notifySystemAlerts) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Host disabled video bubbles in room settings.'),
-          ),
-        );
-      }
-      return;
-    }
     try {
-      if (_remoteCallStream == null) {
+      if (_localCallStream == null) {
         await _startOrJoinCall(state);
       } else {
         if (!mounted) return;
         setState(() => _videoBubbleVisible = !_videoBubbleVisible);
       }
+    } on CallPermissionException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          duration: const Duration(seconds: 5),
+          action: e.permanentlyDenied
+              ? SnackBarAction(
+                  label: 'Settings',
+                  onPressed: openAppSettings,
+                )
+              : null,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Camera/mic: allow permissions in System settings. ($e)',
-          ),
+          content: Text('Video call failed: $e'),
+          duration: const Duration(seconds: 5),
         ),
       );
     }
@@ -201,28 +224,82 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
 
   void _sendMessage() {
     final text = _messageController.text;
+    if (text.trim().isEmpty) return;
+
+    final roomState = context.read<RoomBloc>().state;
+    final moderation = ChatModeration.moderate(
+      text,
+      enabled: roomState.sensitiveWordsFilterEnabled,
+    );
+
+    if (moderation.wasBlocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            moderation.blockReason ??
+                'This message was blocked by chat moderation.',
+          ),
+          backgroundColor: Colors.orange.shade800,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
     context.read<RoomBloc>().add(RoomMessageSent(text));
     _messageController.clear();
   }
 
+  Future<void> _reportMessage(RoomMessage message) async {
+    final reason = await ReportMessageDialog.show(
+      context,
+      authorName: message.author,
+      messagePreview: message.text,
+    );
+    if (!mounted || reason == null) return;
+
+    context.read<RoomBloc>().add(
+      RoomMessageReported(
+        messageId: message.id,
+        messageText: message.text,
+        reportedAuthor: message.author,
+        reportedAuthorId: message.authorId,
+        reason: reason,
+      ),
+    );
+  }
+
   Future<double> _currentPositionSeconds(RoomState state) async {
-    if (_isYouTubeUrl(state.videoUrl ?? '')) {
+    if (_playbackKind == VideoPlaybackKind.youtube) {
       final yt = _youtubeKey.currentState;
       if (yt != null) return await yt.currentPositionSeconds();
       return 0;
+    }
+    if (_playbackKind == VideoPlaybackKind.webPage) {
+      return await _webPageKey.currentState?.currentPositionSeconds() ?? 0;
     }
     final pos = _videoController?.value.position ?? Duration.zero;
     return pos.inMilliseconds / 1000.0;
   }
 
   Future<void> _setPlaying(RoomState state, bool playing) async {
-    if (_isYouTubeUrl(state.videoUrl ?? '')) {
+    if (_playbackKind == VideoPlaybackKind.youtube) {
       final yt = _youtubeKey.currentState;
       if (yt == null) return;
       if (playing) {
         await yt.play();
       } else {
         await yt.pause();
+      }
+      return;
+    }
+    if (_playbackKind == VideoPlaybackKind.webPage) {
+      final web = _webPageKey.currentState;
+      if (web == null) return;
+      if (playing) {
+        await web.play();
+      } else {
+        await web.pause();
       }
       return;
     }
@@ -283,8 +360,10 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   Future<void> _seekLocalTo(RoomState state, double seconds) async {
     if (seconds.isNaN) return;
     final safe = seconds < 0 ? 0.0 : seconds;
-    if (_isYouTubeUrl(state.videoUrl ?? '')) {
+    if (_playbackKind == VideoPlaybackKind.youtube) {
       await _youtubeKey.currentState?.seekToSeconds(safe);
+    } else if (_playbackKind == VideoPlaybackKind.webPage) {
+      await _webPageKey.currentState?.seekToSeconds(safe);
     } else if (_videoController != null &&
         _videoController!.value.isInitialized) {
       await _videoController!.seekTo(
@@ -337,7 +416,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     final expected = _targetPositionSeconds(state);
     final local = await _currentPositionSeconds(state);
 
-    if (_isYouTubeUrl(url)) {
+    if (_playbackKind == VideoPlaybackKind.youtube) {
       final playing = await _youtubeKey.currentState?.isPlaying() ?? false;
       if (state.isPlaying != playing) {
         await _setPlaying(state, state.isPlaying);
@@ -363,6 +442,26 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       _lastYoutubeDriftSeekWallClock = now;
       final to = decision.seekToSeconds ?? expected;
       await _youtubeKey.currentState?.seekToSeconds(to);
+      return;
+    }
+
+    if (_playbackKind == VideoPlaybackKind.webPage) {
+      final playing = await _webPageKey.currentState?.isPlaying() ?? false;
+      if (state.isPlaying != playing) {
+        await _setPlaying(state, state.isPlaying);
+      }
+      if (!_playbackAnchorCoherentForDrift(state)) return;
+      final decision = PlaybackSyncMath.driftDecision(
+        expectedSeconds: expected,
+        localSeconds: local,
+      );
+      if (decision.kind == DriftKind.hardSeek) {
+        final to = decision.seekToSeconds ?? expected;
+        await _webPageKey.currentState?.syncTo(
+          seconds: to,
+          playing: state.isPlaying,
+        );
+      }
       return;
     }
 
@@ -458,9 +557,13 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   }
 
   Future<void> _togglePlayback(RoomState state) async {
-    final currentlyPlaying = _isYouTubeUrl(state.videoUrl ?? '')
-        ? (await _youtubeKey.currentState?.isPlaying() ?? false)
-        : (_videoController?.value.isPlaying ?? false);
+    final currentlyPlaying = switch (_playbackKind) {
+      VideoPlaybackKind.youtube =>
+        await _youtubeKey.currentState?.isPlaying() ?? false,
+      VideoPlaybackKind.webPage =>
+        await _webPageKey.currentState?.isPlaying() ?? false,
+      _ => _videoController?.value.isPlaying ?? false,
+    };
     final target = !currentlyPlaying;
 
     await _setPlaying(state, target);
@@ -599,9 +702,18 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
               listener: (context, state) {
                 if (state.actionMessage != null &&
                     state.actionMessage!.trim().isNotEmpty) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(state.actionMessage!)));
+                  final isModeration = state.actionMessage!.contains('filtered') ||
+                      state.actionMessage!.contains('blocked') ||
+                      state.actionMessage!.contains('Report');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(state.actionMessage!),
+                      backgroundColor: isModeration
+                          ? Colors.orange.shade800
+                          : null,
+                      duration: Duration(seconds: isModeration ? 4 : 3),
+                    ),
+                  );
                   context.read<RoomBloc>().add(
                     const RoomActionMessageConsumed(),
                   );
@@ -636,7 +748,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
               },
               child: BlocBuilder<RoomBloc, RoomState>(
                 builder: (context, state) {
-                  _setupVideoController(state.videoUrl);
+                  unawaited(_preparePlaybackSource(state.videoUrl));
 
                   if (state.status == RoomStatus.loading) {
                     return const Center(child: CircularProgressIndicator());
@@ -759,7 +871,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                   return Stack(
                     children: [
                       content,
-                      if (_videoBubbleVisible && _remoteCallStream != null)
+                      if (_videoBubbleVisible &&
+                          _remoteCallStream != null &&
+                          _renderersInitialized)
                         _buildRemoteVideoBubble(),
                     ],
                   );
@@ -772,52 +886,61 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     );
   }
 
-  void _setupVideoController(String? url) {
-    if (url == null || url.isEmpty || _isYouTubeUrl(url)) {
-      if (_videoController != null) {
-        _videoController!.dispose();
-        _videoController = null;
-        _initializeVideoFuture = null;
-        _currentVideoUrl = null;
-      }
+  Future<void> _preparePlaybackSource(String? url) async {
+    final trimmed = url?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      _resetPlayback();
+      if (mounted) setState(() {});
       return;
     }
+    if (_preparedSourceUrl == trimmed) return;
+    _preparedSourceUrl = trimmed;
 
-    if (_currentVideoUrl == url && _videoController != null) {
-      return;
+    final kind = VideoUrlClassifier.classify(trimmed);
+    switch (kind) {
+      case VideoPlaybackKind.youtube:
+        _playbackKind = kind;
+        _disposeDirectPlayer();
+        if (mounted) setState(() => _resolvingPlayback = false);
+        return;
+      case VideoPlaybackKind.localFile:
+        _playbackKind = kind;
+        _setupDirectPlayer(trimmed, isLocal: true);
+        if (mounted) setState(() => _resolvingPlayback = false);
+        return;
+      case VideoPlaybackKind.directStream:
+        _playbackKind = kind;
+        _setupDirectPlayer(trimmed);
+        if (mounted) setState(() => _resolvingPlayback = false);
+        return;
+      case VideoPlaybackKind.webPage:
+        if (mounted) setState(() => _resolvingPlayback = true);
+        _disposeDirectPlayer();
+        final result = await _webVideoResolver.resolve(trimmed);
+        if (!mounted || _preparedSourceUrl != trimmed) return;
+        if (result.hasDirectStream) {
+          _playbackKind = VideoPlaybackKind.directStream;
+          _setupDirectPlayer(result.directStreamUrl!);
+        } else {
+          _playbackKind = VideoPlaybackKind.webPage;
+        }
+        if (mounted) setState(() => _resolvingPlayback = false);
+        return;
+      case VideoPlaybackKind.unsupported:
+        _playbackKind = kind;
+        _disposeDirectPlayer();
+        if (mounted) setState(() => _resolvingPlayback = false);
     }
+  }
 
-    final uri = Uri.tryParse(url);
-    final lower = url.toLowerCase();
-    final isNetwork =
-        uri != null &&
-        (uri.scheme == 'http' || uri.scheme == 'https') &&
-        (uri.path.endsWith('.mp4') || uri.path.endsWith('.m3u8'));
-    final isLocalFile =
-        !isNetwork &&
-        (lower.endsWith('.mp4') ||
-            lower.endsWith('.mkv') ||
-            lower.endsWith('.mov') ||
-            lower.endsWith('.avi') ||
-            lower.endsWith('.wmv') ||
-            lower.endsWith('.flv') ||
-            lower.endsWith('.webm'));
-
-    if (!isNetwork && !isLocalFile) {
-      if (_videoController != null) {
-        _videoController!.dispose();
-        _videoController = null;
-        _initializeVideoFuture = null;
-      }
-      _currentVideoUrl = url;
-      return;
-    }
+  void _setupDirectPlayer(String url, {bool isLocal = false}) {
+    if (_currentVideoUrl == url && _videoController != null) return;
 
     _videoController?.dispose();
-    if (isNetwork) {
-      _videoController = VideoPlayerController.networkUrl(uri);
-    } else {
+    if (isLocal) {
       _videoController = VideoPlayerController.file(File(url));
+    } else {
+      _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
     }
     _currentVideoUrl = url;
     _initializeVideoFuture = _videoController!.initialize().then((_) async {
@@ -828,6 +951,20 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
         await _applyPlaybackFromFirestore(s, force: true);
       }
     });
+  }
+
+  void _disposeDirectPlayer() {
+    _videoController?.dispose();
+    _videoController = null;
+    _initializeVideoFuture = null;
+    _currentVideoUrl = null;
+  }
+
+  void _resetPlayback() {
+    _preparedSourceUrl = null;
+    _playbackKind = VideoPlaybackKind.unsupported;
+    _resolvingPlayback = false;
+    _disposeDirectPlayer();
   }
 
   Widget _buildVideoPane(
@@ -941,7 +1078,15 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                         ),
                       ),
                     )
-                  : _isYouTubeUrl(state.videoUrl!)
+                  : _resolvingPlayback
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          AppColors.textWhite,
+                        ),
+                      ),
+                    )
+                  : _playbackKind == VideoPlaybackKind.youtube
                   ? YoutubePlayerView(
                       key: _youtubeKey,
                       videoUrl: state.videoUrl!,
@@ -952,6 +1097,17 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                               if (!mounted) return;
                               setState(() => _youtubeImmersive = expanded);
                             },
+                    )
+                  : _playbackKind == VideoPlaybackKind.webPage
+                  ? WebPagePlayerView(
+                      key: _webPageKey,
+                      pageUrl: state.videoUrl!,
+                      immersiveLayout: immersive,
+                      onVideoReady: () {
+                        if (!mounted) return;
+                        final s = context.read<RoomBloc>().state;
+                        unawaited(_applyPlaybackFromFirestore(s, force: true));
+                      },
                     )
                   : Container(
                       width: double.infinity,
@@ -972,6 +1128,17 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                                     return const CircularProgressIndicator(
                                       valueColor: AlwaysStoppedAnimation<Color>(
                                         AppColors.textWhite,
+                                      ),
+                                    );
+                                  }
+                                  if (snapshot.hasError) {
+                                    return Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Text(
+                                        'Could not play this video stream.',
+                                        textAlign: TextAlign.center,
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(color: Colors.white),
                                       ),
                                     );
                                   }
@@ -1002,91 +1169,13 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                                   );
                                 },
                               )
-                            : Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.play_circle_fill,
-                                    size: 72,
-                                    color: AppColors.textWhite.withValues(
-                                      alpha: 0.95,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    'Open video in browser / app',
-                                    style: theme.textTheme.titleMedium
-                                        ?.copyWith(
-                                          color: AppColors.textWhite,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: AppConstants.spacingMedium,
-                                    ),
-                                    child: SelectableText(
-                                      state.videoUrl!,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: AppColors.textWhite
-                                                .withValues(alpha: 0.9),
-                                          ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  ElevatedButton.icon(
-                                    onPressed: () async {
-                                      final uri = Uri.tryParse(state.videoUrl!);
-                                      if (uri == null || !uri.hasScheme) {
-                                        if (!mounted) return;
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              'Invalid video URL. Please recreate the room with a valid link.',
-                                            ),
-                                          ),
-                                        );
-                                        return;
-                                      }
-                                      try {
-                                        final ok = await launchUrl(
-                                          uri,
-                                          mode: LaunchMode.externalApplication,
-                                        );
-                                        if (!mounted) return;
-                                        if (!ok) {
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            const SnackBar(
-                                              content: Text(
-                                                'No app handled this link. Install a browser or try again.',
-                                              ),
-                                            ),
-                                          );
-                                        }
-                                      } catch (e) {
-                                        if (!mounted) return;
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              'Could not open link: $e',
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    icon: const Icon(Icons.open_in_new),
-                                    label: const Text('Open Video'),
-                                  ),
-                                ],
+                            : const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Text(
+                                  'Preparing video…',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.white),
+                                ),
                               ),
                       ),
                     ),
@@ -1104,7 +1193,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (!_isYouTubeUrl(state.videoUrl ?? ''))
+                    if (_playbackKind != VideoPlaybackKind.youtube)
                       IconButton(
                         tooltip: 'Fullscreen video',
                         onPressed: () =>
@@ -1155,7 +1244,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
               ),
             ),
             const SizedBox(height: AppConstants.spacingSmall),
-            if (_localCallStream != null && _videoBubbleVisible)
+            if (_localCallStream != null &&
+                _videoBubbleVisible &&
+                _renderersInitialized)
               Padding(
                 padding: const EdgeInsets.only(
                   left: AppConstants.spacingMedium,
@@ -1255,189 +1346,151 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
         ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
         : const EdgeInsets.all(AppConstants.spacingMedium);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.primaryDarkVariant : AppColors.lightSurface,
-        borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
-        border: Border.all(
-          color: theme.colorScheme.primary.withValues(alpha: 0.2),
-        ),
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: headerPadding,
-            child: Row(
-              children: [
-                Icon(
-                  Icons.chat_bubble_outline,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Room Chat',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.borderRadiusSmall,
-                      ),
-                    ),
-                    child: Text(
-                      'Live',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+    return BlocBuilder<RoomBloc, RoomState>(
+      builder: (context, roomState) {
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.primaryDarkVariant : AppColors.lightSurface,
+            borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
+            border: Border.all(
+              color: theme.colorScheme.primary.withValues(alpha: 0.2),
             ),
           ),
-          const Divider(height: 1),
-          Expanded(
-            child: BlocBuilder<RoomBloc, RoomState>(
-              builder: (context, state) {
-                final messages = state.messages;
-                final maxBubbleW = MediaQuery.sizeOf(context).width * 0.85;
-                return ListView.builder(
-                  padding: listPadding,
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final message = messages[index];
-                    final isMe = message.author == 'You';
-                    return Align(
-                      alignment: isMe
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: Container(
-                        constraints: BoxConstraints(maxWidth: maxBubbleW),
-                        margin: const EdgeInsets.only(
-                          bottom: AppConstants.spacingSmall,
+          child: Column(
+            children: [
+              Padding(
+                padding: headerPadding,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_outline,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Room Chat',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
                         ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppConstants.spacingMedium,
-                          vertical: AppConstants.spacingSmall,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isMe
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.surface.withValues(
-                                  alpha: 0.9,
-                                ),
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(
-                              AppConstants.borderRadiusMedium,
-                            ),
-                            topRight: Radius.circular(
-                              AppConstants.borderRadiusMedium,
-                            ),
-                            bottomLeft: Radius.circular(
-                              isMe
-                                  ? AppConstants.borderRadiusMedium
-                                  : AppConstants.borderRadiusSmall,
-                            ),
-                            bottomRight: Radius.circular(
-                              isMe
-                                  ? AppConstants.borderRadiusSmall
-                                  : AppConstants.borderRadiusMedium,
-                            ),
+                      ),
+                    ),
+                    if (roomState.sensitiveWordsFilterEnabled) ...[
+                      const SizedBox(width: 6),
+                      Tooltip(
+                        message:
+                            'Chat moderation is on. Harmful words are filtered or blocked.',
+                        child: Icon(
+                          Icons.shield_outlined,
+                          size: 18,
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.85,
                           ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: isMe
-                              ? CrossAxisAlignment.end
-                              : CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              message.author,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: isMe
-                                    ? AppColors.textWhite.withValues(alpha: 0.8)
-                                    : theme.colorScheme.onSurface.withValues(
-                                        alpha: 0.7,
-                                      ),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              message.text,
-                              softWrap: true,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: isMe
-                                    ? AppColors.textWhite
-                                    : theme.colorScheme.onSurface,
-                              ),
-                            ),
-                          ],
-                        ),
                       ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(AppConstants.spacingSmall),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    enabled: textChatEnabled,
-                    minLines: 1,
-                    maxLines: compactInput ? 1 : 3,
-                    decoration: InputDecoration(
-                      hintText: textChatEnabled
-                          ? 'Say something to the room...'
-                          : 'Chat disabled by host',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppConstants.borderRadiusLarge,
+                    ],
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
                         ),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: AppConstants.spacingMedium,
-                        vertical: AppConstants.spacingSmall,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.15,
+                          ),
+                          borderRadius: BorderRadius.circular(
+                            AppConstants.borderRadiusSmall,
+                          ),
+                        ),
+                        child: Text(
+                          'Live',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ),
-                    onSubmitted: (_) => _sendMessage(),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: AppConstants.spacingSmall),
-                CircleAvatar(
-                  backgroundColor: theme.colorScheme.primary,
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: AppColors.textWhite),
-                    onPressed: textChatEnabled ? _sendMessage : null,
-                  ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: BlocBuilder<RoomBloc, RoomState>(
+                  builder: (context, state) {
+                    final messages = state.messages;
+                    final maxBubbleW = MediaQuery.sizeOf(context).width * 0.85;
+                    final myUid = fb.FirebaseAuth.instance.currentUser?.uid;
+                    return ListView.builder(
+                      padding: listPadding,
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) {
+                        final message = messages[index];
+                        final isMe =
+                            myUid != null && myUid == message.authorId;
+                        return ChatMessageBubble(
+                          message: message,
+                          isMe: isMe,
+                          maxWidth: maxBubbleW,
+                          onReport: isMe ? null : _reportMessage,
+                        );
+                      },
+                    );
+                  },
                 ),
-              ],
-            ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.all(AppConstants.spacingSmall),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _messageController,
+                        enabled: textChatEnabled,
+                        minLines: 1,
+                        maxLines: compactInput ? 1 : 3,
+                        decoration: InputDecoration(
+                          hintText: textChatEnabled
+                              ? 'Say something to the room...'
+                              : 'Chat disabled by host',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(
+                              AppConstants.borderRadiusLarge,
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppConstants.spacingMedium,
+                            vertical: AppConstants.spacingSmall,
+                          ),
+                        ),
+                        onSubmitted: (_) => _sendMessage(),
+                      ),
+                    ),
+                    const SizedBox(width: AppConstants.spacingSmall),
+                    CircleAvatar(
+                      backgroundColor: theme.colorScheme.primary,
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.send,
+                          color: AppColors.textWhite,
+                        ),
+                        onPressed: textChatEnabled ? _sendMessage : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

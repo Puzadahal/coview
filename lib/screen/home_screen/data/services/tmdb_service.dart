@@ -9,7 +9,7 @@ import '../models/movie_recommendation.dart';
 ///
 /// Key resolution order:
 /// 1. `--dart-define=TMDB_API_KEY=...` at build/run time
-/// 2. `lib/config/tmdb_secrets.dart` (local, gitignored)
+/// 2. `lib/config/tmdb_secrets.dart`
 /// 3. Curated fallback list if no key is set
 class TmdbService {
   TmdbService({http.Client? client}) : _client = client ?? http.Client();

@@ -291,30 +291,9 @@ class CreateRoomBloc extends Bloc<CreateRoomEvent, CreateRoomState> {
     final uri = Uri.tryParse(url);
     if (uri == null || !uri.hasScheme) return false;
     if (!(uri.scheme == 'http' || uri.scheme == 'https')) return false;
+    if (uri.host.isEmpty) return false;
 
-    if (uri.host.contains('youtube.com') || uri.host.contains('youtu.be')) {
-      return true;
-    }
-
-    final videoHosts = [
-      'vimeo.com',
-      'dailymotion.com',
-      'twitch.tv',
-      'facebook.com',
-      'instagram.com',
-    ];
-
-    for (final host in videoHosts) {
-      if (uri.host.contains(host)) {
-        return true;
-      }
-    }
-
-    final lowerPath = uri.path.toLowerCase();
-    return lowerPath.endsWith('.mp4') ||
-        lowerPath.endsWith('.m3u8') ||
-        lowerPath.endsWith('.webm') ||
-        lowerPath.endsWith('.mov');
+    return true;
   }
 
   bool _isLikelyLocalVideoPath(String value) {

@@ -29,7 +29,7 @@ class CreateRoomState extends Equatable {
     this.textChatEnabled = true,
     this.voiceChatEnabled = false,
     this.videoCallEnabled = true,
-    this.videoBubblesEnabled = false,
+    this.videoBubblesEnabled = true,
     this.sensitiveWordsFilterEnabled = true,
     this.isAdvancedSettingsExpanded = false,
     this.isUrlValid = false,

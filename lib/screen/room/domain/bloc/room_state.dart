@@ -1,12 +1,14 @@
 import 'package:equatable/equatable.dart';
 
 class RoomMessage extends Equatable {
+  final String id;
   final String author;
   final String? authorId;
   final String text;
   final DateTime? createdAt;
 
   const RoomMessage({
+    this.id = '',
     required this.author,
     this.authorId,
     required this.text,
@@ -14,7 +16,7 @@ class RoomMessage extends Equatable {
   });
 
   @override
-  List<Object?> get props => [author, authorId, text, createdAt];
+  List<Object?> get props => [id, author, authorId, text, createdAt];
 }
 
 enum RoomStatus { viewing, loading, error }
