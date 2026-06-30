@@ -243,7 +243,18 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
           _callService!.connectionStateUpdates.listen((callState) {
         if (!mounted) return;
         if (callState == RoomCallConnectionState.connected) {
-          _bindRemoteRenderer();
+          _bindRemoteRenderer(bumpVersion: true);
+        } else if (callState == RoomCallConnectionState.failed &&
+            _notifySystemAlerts) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Video call connection failed. End the call and try again. '
+                'Use two real phones on the same Wi‑Fi for best results.',
+              ),
+              duration: Duration(seconds: 6),
+            ),
+          );
         }
         setState(() => _callConnectionState = callState);
       });

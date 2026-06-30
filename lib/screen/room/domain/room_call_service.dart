@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
+import '../../../config/webrtc_ice_config.dart';
 import '../../../core/permissions/call_permissions.dart';
 import '../../../core/permissions/call_audio_session.dart';
 
@@ -31,6 +32,7 @@ class RoomCallService {
       StreamController<RoomCallConnectionState>.broadcast();
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _candidatesSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _answerSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _hostRenegotiationSub;
   final Set<String> _appliedCandidateDocIds = <String>{};
   final List<RTCIceCandidate> _pendingRemoteCandidates = <RTCIceCandidate>[];
   bool _remoteDescriptionApplied = false;
@@ -38,30 +40,13 @@ class RoomCallService {
   RoomCallRole? _role;
   int _callGeneration = 0;
   Timer? _trackSyncTimer;
+  bool _iceRestartAttempted = false;
+  String? _lastProcessedHostSdp;
 
-  static final _peerConfig = {
-    'iceServers': [
-      {'urls': 'stun:stun.l.google.com:19302'},
-      {'urls': 'stun:stun1.l.google.com:19302'},
-      {
-        'urls': 'turn:openrelay.metered.ca:80',
-        'username': 'openrelayproject',
-        'credential': 'openrelayproject',
-      },
-      {
-        'urls': 'turn:openrelay.metered.ca:443',
-        'username': 'openrelayproject',
-        'credential': 'openrelayproject',
-      },
-      {
-        'urls': 'turn:openrelay.metered.ca:443?transport=tcp',
-        'username': 'openrelayproject',
-        'credential': 'openrelayproject',
-      },
-    ],
+  Map<String, dynamic> get _peerConfig => {
+    'iceServers': WebRtcIceConfig.iceServers,
     'sdpSemantics': 'unified-plan',
     'iceCandidatePoolSize': 10,
-    'bundlePolicy': 'max-bundle',
     'rtcpMuxPolicy': 'require',
     'iceTransportPolicy': 'all',
   };
@@ -162,6 +147,7 @@ class RoomCallService {
 
     final hostData = hostDoc.data()!;
     _callGeneration = hostData['generation'] as int? ?? 0;
+    _lastProcessedHostSdp = hostData['sdp'] as String?;
     final offer = RTCSessionDescription(
       hostData['sdp'] as String,
       hostData['type'] as String,
@@ -179,6 +165,14 @@ class RoomCallService {
 
     final answer = await _peerConnection!.createAnswer(_offerAnswerConstraints);
     await _peerConnection!.setLocalDescription(answer);
+    final local = await _localDescriptionWithCandidates();
+    final sdp = local?.sdp ?? answer.sdp;
+    final type = local?.type ?? answer.type;
+
+    debugPrint(
+      'RoomCallService: guest answer ready (${sdp?.length ?? 0} chars, '
+      'candidates=${sdp?.contains("a=candidate") ?? false})',
+    );
 
     await _firestore
         .collection('rooms')
@@ -186,8 +180,8 @@ class RoomCallService {
         .collection('call')
         .doc('guest')
         .set({
-          'sdp': answer.sdp,
-          'type': answer.type,
+          'sdp': sdp,
+          'type': type,
           'generation': _callGeneration,
           'participantId': guestId ?? '',
           'participantName': guestName ?? 'Guest',
@@ -197,6 +191,7 @@ class RoomCallService {
     await _flushPendingRemoteCandidates();
     await _syncRemoteTracksFromReceivers();
     _startTrackSyncTimer();
+    _listenForHostRenegotiation();
   }
 
   Future<bool> hostOfferExists() async {
@@ -214,11 +209,15 @@ class RoomCallService {
     _trackSyncTimer = null;
     await _candidatesSub?.cancel();
     await _answerSub?.cancel();
+    await _hostRenegotiationSub?.cancel();
     _candidatesSub = null;
     _answerSub = null;
+    _hostRenegotiationSub = null;
     _appliedCandidateDocIds.clear();
     _pendingRemoteCandidates.clear();
     _remoteDescriptionApplied = false;
+    _iceRestartAttempted = false;
+    _lastProcessedHostSdp = null;
 
     for (final track in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
       await track.stop();
@@ -271,8 +270,104 @@ class RoomCallService {
         unawaited(_syncRemoteTracksFromReceivers());
       } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
         _emitConnectionState(RoomCallConnectionState.failed);
+        unawaited(_attemptIceRecovery());
       }
     };
+  }
+
+  Future<void> _waitForIceGatheringComplete() async {
+    final pc = _peerConnection;
+    if (pc == null || _disposed) return;
+
+    if (pc.iceGatheringState ==
+        RTCIceGatheringState.RTCIceGatheringStateComplete) {
+      return;
+    }
+
+    final completer = Completer<void>();
+    pc.onIceGatheringState = (RTCIceGatheringState state) {
+      debugPrint('RoomCallService: iceGatheringState=$state');
+      if (state == RTCIceGatheringState.RTCIceGatheringStateComplete &&
+          !completer.isCompleted) {
+        completer.complete();
+      }
+    };
+
+    try {
+      await completer.future.timeout(
+        const Duration(seconds: 12),
+        onTimeout: () {
+          debugPrint(
+            'RoomCallService: ICE gathering timed out — publishing SDP anyway',
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint('RoomCallService: ICE gathering wait error: $e');
+    }
+  }
+
+  Future<RTCSessionDescription?> _localDescriptionWithCandidates() async {
+    await _waitForIceGatheringComplete();
+    return _peerConnection?.getLocalDescription();
+  }
+
+  Future<void> _attemptIceRecovery() async {
+    if (_disposed || _peerConnection == null || _iceRestartAttempted) return;
+    _iceRestartAttempted = true;
+    debugPrint('RoomCallService: attempting ICE restart…');
+
+    try {
+      if (_role == RoomCallRole.host) {
+        final offer = await _peerConnection!.createOffer({
+          'iceRestart': true,
+          'offerToReceiveAudio': true,
+          'offerToReceiveVideo': true,
+        });
+        await _peerConnection!.setLocalDescription(offer);
+        final local = await _localDescriptionWithCandidates();
+        if (local == null || _disposed) return;
+        await _firestore
+            .collection('rooms')
+            .doc(roomId)
+            .collection('call')
+            .doc('host')
+            .set({
+              'sdp': local.sdp,
+              'type': local.type,
+              'generation': _callGeneration,
+              'iceRestart': true,
+              'createdAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+        _remoteDescriptionApplied = false;
+        _listenForGuestAnswer();
+      } else if (_role == RoomCallRole.guest) {
+        final answer = await _peerConnection!.createAnswer({
+          'iceRestart': true,
+          'offerToReceiveAudio': true,
+          'offerToReceiveVideo': true,
+        });
+        await _peerConnection!.setLocalDescription(answer);
+        final local = await _localDescriptionWithCandidates();
+        if (local == null || _disposed) return;
+        await _firestore
+            .collection('rooms')
+            .doc(roomId)
+            .collection('call')
+            .doc('guest')
+            .set({
+              'sdp': local.sdp,
+              'type': local.type,
+              'generation': _callGeneration,
+              'iceRestart': true,
+              'createdAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+      }
+      await _flushPendingRemoteCandidates();
+      await _syncRemoteTracksFromReceivers();
+    } catch (e, st) {
+      debugPrint('RoomCallService: ICE restart failed: $e\n$st');
+    }
   }
 
   Future<void> _handleRemoteTrack(RTCTrackEvent event) async {
@@ -389,6 +484,14 @@ class RoomCallService {
 
     final offer = await _peerConnection!.createOffer(_offerAnswerConstraints);
     await _peerConnection!.setLocalDescription(offer);
+    final local = await _localDescriptionWithCandidates();
+    final sdp = local?.sdp ?? offer.sdp;
+    final type = local?.type ?? offer.type;
+
+    debugPrint(
+      'RoomCallService: host offer ready (${sdp?.length ?? 0} chars, '
+      'candidates=${sdp?.contains("a=candidate") ?? false})',
+    );
 
     await _firestore
         .collection('rooms')
@@ -396,8 +499,8 @@ class RoomCallService {
         .collection('call')
         .doc('host')
         .set({
-          'sdp': offer.sdp,
-          'type': offer.type,
+          'sdp': sdp,
+          'type': type,
           'generation': _callGeneration,
           'participantId': hostId ?? '',
           'participantName': hostName ?? 'Host',
@@ -439,6 +542,61 @@ class RoomCallService {
     }
   }
 
+  void _listenForHostRenegotiation() {
+    if (_role != RoomCallRole.guest) return;
+    _hostRenegotiationSub?.cancel();
+    _hostRenegotiationSub = _firestore
+        .collection('rooms')
+        .doc(roomId)
+        .collection('call')
+        .doc('host')
+        .snapshots()
+        .listen((doc) async {
+          if (_disposed || _role != RoomCallRole.guest) return;
+          final data = doc.data();
+          if (data == null || data['iceRestart'] != true) return;
+          if (!_hasValidSessionDescription(data)) return;
+
+          final sdp = data['sdp'] as String;
+          if (sdp == _lastProcessedHostSdp) return;
+          _lastProcessedHostSdp = sdp;
+
+          debugPrint('RoomCallService: guest handling host ICE restart');
+          try {
+            final offer = RTCSessionDescription(sdp, data['type'] as String);
+            await _peerConnection!.setRemoteDescription(offer);
+            _remoteDescriptionApplied = true;
+            _appliedCandidateDocIds.clear();
+            _pendingRemoteCandidates.clear();
+
+            final answer =
+                await _peerConnection!.createAnswer(_offerAnswerConstraints);
+            await _peerConnection!.setLocalDescription(answer);
+            final local = await _localDescriptionWithCandidates();
+
+            await _firestore
+                .collection('rooms')
+                .doc(roomId)
+                .collection('call')
+                .doc('guest')
+                .set({
+                  'sdp': local?.sdp ?? answer.sdp,
+                  'type': local?.type ?? answer.type,
+                  'generation': _callGeneration,
+                  'iceRestart': true,
+                  'createdAt': FieldValue.serverTimestamp(),
+                }, SetOptions(merge: true));
+
+            await _applyExistingCandidates('host');
+            await _flushPendingRemoteCandidates();
+            await _syncRemoteTracksFromReceivers();
+            _iceRestartAttempted = false;
+          } catch (e, st) {
+            debugPrint('RoomCallService: host ICE restart failed: $e\n$st');
+          }
+        });
+  }
+
   void _listenForGuestAnswer() {
     _answerSub?.cancel();
     _answerSub = _firestore
@@ -450,7 +608,6 @@ class RoomCallService {
         .listen((doc) async {
           if (_disposed || _role != RoomCallRole.host) return;
           if (!_hasValidSessionDescription(doc.data())) return;
-          if (_remoteDescriptionApplied) return;
 
           final data = doc.data()!;
           final guestGeneration = data['generation'] as int? ?? 0;
@@ -460,6 +617,9 @@ class RoomCallService {
             return;
           }
 
+          final isIceRestart = data['iceRestart'] == true;
+          if (_remoteDescriptionApplied && !isIceRestart) return;
+
           final answer = RTCSessionDescription(
             data['sdp'] as String,
             data['type'] as String,
@@ -467,6 +627,10 @@ class RoomCallService {
           try {
             await _peerConnection!.setRemoteDescription(answer);
             _remoteDescriptionApplied = true;
+            if (isIceRestart) {
+              _appliedCandidateDocIds.clear();
+              _pendingRemoteCandidates.clear();
+            }
             await _applyExistingCandidates('guest');
             await _flushPendingRemoteCandidates();
             await _syncRemoteTracksFromReceivers();
@@ -645,6 +809,7 @@ class RoomCallService {
     await CallAudioSession.deactivate();
     await _candidatesSub?.cancel();
     await _answerSub?.cancel();
+    await _hostRenegotiationSub?.cancel();
     _appliedCandidateDocIds.clear();
     _pendingRemoteCandidates.clear();
     _remoteDescriptionApplied = false;
