@@ -179,7 +179,7 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
     } catch (_) {}
   }
 
-  /// YouTube IFrame API error codes (same semantics as the package's internal mapping).
+  /// YouTube IFrame API error codes 
   static String _embedErrorExplanation(int code) {
     switch (code) {
       case 1:
