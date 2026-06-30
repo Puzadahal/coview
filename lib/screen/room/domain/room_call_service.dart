@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../../../core/permissions/call_permissions.dart';
+import '../../../core/permissions/call_audio_session.dart';
 
 enum RoomCallRole { host, guest }
 
@@ -36,6 +37,7 @@ class RoomCallService {
   bool _disposed = false;
   RoomCallRole? _role;
   int _callGeneration = 0;
+  Timer? _trackSyncTimer;
 
   static final _peerConfig = {
     'iceServers': [
@@ -58,7 +60,10 @@ class RoomCallService {
       },
     ],
     'sdpSemantics': 'unified-plan',
-    'iceCandidatePoolSize': 8,
+    'iceCandidatePoolSize': 10,
+    'bundlePolicy': 'max-bundle',
+    'rtcpMuxPolicy': 'require',
+    'iceTransportPolicy': 'all',
   };
 
   static const _offerAnswerConstraints = {
@@ -91,6 +96,7 @@ class RoomCallService {
 
     await _resetPeerConnection();
     await _attachLocalMedia();
+    await CallAudioSession.activate();
     _callGeneration = DateTime.now().millisecondsSinceEpoch;
     await _publishHostOffer(hostId: hostId, hostName: hostName);
     await _publishCallInvite(
@@ -142,6 +148,7 @@ class RoomCallService {
 
     await _resetPeerConnection();
     await _attachLocalMedia();
+    await CallAudioSession.activate();
 
     final hostDoc = await _firestore
         .collection('rooms')
@@ -164,12 +171,14 @@ class RoomCallService {
       _publishCandidate('guest', candidate);
     };
 
-    await _peerConnection?.setRemoteDescription(offer);
+    _listenForHostCandidates();
+
+    await _peerConnection!.setRemoteDescription(offer);
     _remoteDescriptionApplied = true;
     await _applyExistingCandidates('host');
 
     final answer = await _peerConnection!.createAnswer(_offerAnswerConstraints);
-    await _peerConnection?.setLocalDescription(answer);
+    await _peerConnection!.setLocalDescription(answer);
 
     await _firestore
         .collection('rooms')
@@ -185,8 +194,9 @@ class RoomCallService {
           'createdAt': FieldValue.serverTimestamp(),
         });
 
-    _listenForHostCandidates();
     await _flushPendingRemoteCandidates();
+    await _syncRemoteTracksFromReceivers();
+    _startTrackSyncTimer();
   }
 
   Future<bool> hostOfferExists() async {
@@ -200,6 +210,8 @@ class RoomCallService {
   }
 
   Future<void> _resetPeerConnection() async {
+    _trackSyncTimer?.cancel();
+    _trackSyncTimer = null;
     await _candidatesSub?.cancel();
     await _answerSub?.cancel();
     _candidatesSub = null;
@@ -240,6 +252,8 @@ class RoomCallService {
       switch (state) {
         case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
           _emitConnectionState(RoomCallConnectionState.connected);
+          unawaited(_syncRemoteTracksFromReceivers());
+          _startTrackSyncTimer();
         case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
           _emitConnectionState(RoomCallConnectionState.failed);
         case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
@@ -264,13 +278,13 @@ class RoomCallService {
   Future<void> _handleRemoteTrack(RTCTrackEvent event) async {
     if (_disposed) return;
 
-    event.track.enabled = true;
+    final track = event.track;
+    track.enabled = true;
 
-    MediaStream? stream;
+    MediaStream stream;
     if (event.streams.isNotEmpty) {
       stream = event.streams.first;
     } else {
-      final track = event.track;
       _remoteStream ??= await createLocalMediaStream('remote');
       final alreadyAdded = _remoteStream!
           .getTracks()
@@ -278,13 +292,11 @@ class RoomCallService {
       if (!alreadyAdded) {
         await _remoteStream!.addTrack(track);
       }
-      stream = _remoteStream;
+      stream = _remoteStream!;
     }
 
-    if (stream == null) return;
-
-    for (final track in stream.getVideoTracks()) {
-      track.enabled = true;
+    for (final t in stream.getTracks()) {
+      t.enabled = true;
     }
 
     await _handleRemoteStream(stream);
@@ -310,8 +322,13 @@ class RoomCallService {
         }
       }
 
-      if (stream != null && (changed || _remoteStream == null)) {
-        await _handleRemoteStream(stream);
+      if (stream != null) {
+        for (final track in stream.getTracks()) {
+          track.enabled = true;
+        }
+        if (changed || _remoteStream == null) {
+          await _handleRemoteStream(stream);
+        }
       }
     } catch (e) {
       debugPrint('RoomCallService: sync receivers failed: $e');
@@ -320,11 +337,22 @@ class RoomCallService {
 
   Future<void> _handleRemoteStream(MediaStream? stream) async {
     if (_disposed || stream == null) return;
+    for (final track in stream.getTracks()) {
+      track.enabled = true;
+    }
     _remoteStream = stream;
     if (!_remoteStreamController.isClosed) {
       _remoteStreamController.add(stream);
     }
     _emitConnectionState(RoomCallConnectionState.connected);
+  }
+
+  void _startTrackSyncTimer() {
+    if (_disposed) return;
+    _trackSyncTimer?.cancel();
+    _trackSyncTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(_syncRemoteTracksFromReceivers());
+    });
   }
 
   Future<void> _attachLocalMedia() async {
@@ -436,10 +464,16 @@ class RoomCallService {
             data['sdp'] as String,
             data['type'] as String,
           );
-          await _peerConnection?.setRemoteDescription(answer);
-          _remoteDescriptionApplied = true;
-          await _applyExistingCandidates('guest');
-          await _flushPendingRemoteCandidates();
+          try {
+            await _peerConnection!.setRemoteDescription(answer);
+            _remoteDescriptionApplied = true;
+            await _applyExistingCandidates('guest');
+            await _flushPendingRemoteCandidates();
+            await _syncRemoteTracksFromReceivers();
+            _startTrackSyncTimer();
+          } catch (e, st) {
+            debugPrint('RoomCallService: apply guest answer failed: $e\n$st');
+          }
         });
   }
 
@@ -605,7 +639,10 @@ class RoomCallService {
 
   Future<void> dispose() async {
     _disposed = true;
+    _trackSyncTimer?.cancel();
+    _trackSyncTimer = null;
     await _clearCallInvite();
+    await CallAudioSession.deactivate();
     await _candidatesSub?.cancel();
     await _answerSub?.cancel();
     _appliedCandidateDocIds.clear();

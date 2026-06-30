@@ -127,6 +127,7 @@ class RoomCallRemoteBubble extends StatelessWidget {
   final RoomCallConnectionState connectionState;
   final bool isRoomHost;
   final String remoteParticipantName;
+  final int remoteStreamVersion;
   final VoidCallback onClose;
 
   const RoomCallRemoteBubble({
@@ -138,6 +139,7 @@ class RoomCallRemoteBubble extends StatelessWidget {
     required this.connectionState,
     required this.isRoomHost,
     required this.remoteParticipantName,
+    required this.remoteStreamVersion,
     required this.onClose,
   });
 
@@ -174,6 +176,7 @@ class RoomCallRemoteBubble extends StatelessWidget {
             if (hasRemoteVideo && renderersReady)
               RTCVideoView(
                 renderer,
+                key: ValueKey('remote-$remoteStreamVersion'),
                 objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
               )
             else if (hasRemoteStream && renderersReady)

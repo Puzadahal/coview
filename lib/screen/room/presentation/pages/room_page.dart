@@ -72,6 +72,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   bool _incomingCallPrimed = false;
   int _lastSeenCallGeneration = 0;
   String _remoteParticipantName = 'Guest';
+  int _remoteStreamVersion = 0;
   int _lastPlaybackVersionApplied = -1;
   //Avoid back-to-back YouTube drift seeks; each seek shows buffering/loading.
   DateTime? _lastYoutubeDriftSeekWallClock;
@@ -152,10 +153,11 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     _listenForRemoteParticipantName(isRoomHost);
   }
 
-  void _bindRemoteRenderer() {
+  void _bindRemoteRenderer({bool bumpVersion = true}) {
     if (!_renderersInitialized || _remoteCallStream == null) return;
     _remoteRenderer.srcObject = null;
     _remoteRenderer.srcObject = _remoteCallStream;
+    if (bumpVersion) _remoteStreamVersion++;
   }
 
   @override
@@ -216,9 +218,19 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     _isCallConnecting = true;
     try {
       await _initializeCallRenderers();
-      _callService ??= RoomCallService(state.roomId);
 
-      _remoteStreamSub ??= _callService!.remoteStreamUpdates.listen((stream) {
+      if (_callService != null) {
+        await _callService!.dispose();
+        _callService = null;
+      }
+      await _remoteStreamSub?.cancel();
+      await _callConnectionSub?.cancel();
+      _remoteStreamSub = null;
+      _callConnectionSub = null;
+
+      _callService = RoomCallService(state.roomId);
+
+      _remoteStreamSub = _callService!.remoteStreamUpdates.listen((stream) {
         if (!mounted) return;
         setState(() {
           _remoteCallStream = stream;
@@ -227,7 +239,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
         });
       });
 
-      _callConnectionSub ??=
+      _callConnectionSub =
           _callService!.connectionStateUpdates.listen((callState) {
         if (!mounted) return;
         if (callState == RoomCallConnectionState.connected) {
@@ -321,6 +333,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       _micMuted = false;
       _cameraMuted = false;
       _remoteParticipantName = 'Guest';
+      _remoteStreamVersion = 0;
       if (_renderersInitialized) {
         _localRenderer.srcObject = null;
         _remoteRenderer.srcObject = null;
@@ -1702,6 +1715,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                     remoteParticipantName: _remoteParticipantName.isNotEmpty
                         ? _remoteParticipantName
                         : _fallbackRemoteName(roomState, isRoomHost),
+                    remoteStreamVersion: _remoteStreamVersion,
                     onClose: () => unawaited(_endVideoCall()),
                   ),
                 ),
