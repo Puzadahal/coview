@@ -6,6 +6,16 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../../../core/permissions/call_permissions.dart';
 
+enum RoomCallRole { host, guest }
+
+enum RoomCallConnectionState {
+  idle,
+  connecting,
+  connected,
+  failed,
+  disconnected,
+}
+
 class RoomCallService {
   RoomCallService(this.roomId);
 
@@ -16,33 +26,108 @@ class RoomCallService {
   MediaStream? _remoteStream;
   final _firestore = FirebaseFirestore.instance;
   final _remoteStreamController = StreamController<MediaStream>.broadcast();
+  final _connectionStateController =
+      StreamController<RoomCallConnectionState>.broadcast();
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _candidatesSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _answerSub;
   final Set<String> _appliedCandidateDocIds = <String>{};
   final List<RTCIceCandidate> _pendingRemoteCandidates = <RTCIceCandidate>[];
   bool _remoteDescriptionApplied = false;
   bool _disposed = false;
+  RoomCallRole? _role;
+  int _callGeneration = 0;
 
-  static const _peerConfig = {
+  static final _peerConfig = {
     'iceServers': [
       {'urls': 'stun:stun.l.google.com:19302'},
       {'urls': 'stun:stun1.l.google.com:19302'},
+      {
+        'urls': 'turn:openrelay.metered.ca:80',
+        'username': 'openrelayproject',
+        'credential': 'openrelayproject',
+      },
+      {
+        'urls': 'turn:openrelay.metered.ca:443',
+        'username': 'openrelayproject',
+        'credential': 'openrelayproject',
+      },
+      {
+        'urls': 'turn:openrelay.metered.ca:443?transport=tcp',
+        'username': 'openrelayproject',
+        'credential': 'openrelayproject',
+      },
     ],
     'sdpSemantics': 'unified-plan',
+    'iceCandidatePoolSize': 8,
   };
 
-  Future<void> startCall() async {
+  static const _offerAnswerConstraints = {
+    'offerToReceiveAudio': true,
+    'offerToReceiveVideo': true,
+    'voiceActivityDetection': true,
+  };
+
+  Stream<MediaStream> get remoteStreamUpdates => _remoteStreamController.stream;
+  Stream<RoomCallConnectionState> get connectionStateUpdates =>
+      _connectionStateController.stream;
+
+  MediaStream? get localStream => _localStream;
+  MediaStream? get remoteStream => _remoteStream;
+  RoomCallRole? get role => _role;
+
+  Future<void> startCall({bool clearExisting = true}) async {
     if (_disposed) return;
-    await _ensurePeerConnection();
+    _role = RoomCallRole.host;
+    _emitConnectionState(RoomCallConnectionState.connecting);
+
+    if (clearExisting) {
+      await _clearCallSignaling(clearAll: true);
+    }
+
+    await _resetPeerConnection();
     await _attachLocalMedia();
+    _callGeneration = DateTime.now().millisecondsSinceEpoch;
     await _publishHostOffer();
     _listenForGuestAnswer();
     _listenForGuestCandidates();
   }
 
+  Future<bool> waitForHostOffer({
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    final hostRef = _firestore
+        .collection('rooms')
+        .doc(roomId)
+        .collection('call')
+        .doc('host');
+
+    final existing = await hostRef.get();
+    if (_hasValidSessionDescription(existing.data())) return true;
+
+    final completer = Completer<bool>();
+    late final StreamSubscription<DocumentSnapshot<Map<String, dynamic>>> sub;
+    final timer = Timer(timeout, () {
+      if (!completer.isCompleted) completer.complete(false);
+    });
+
+    sub = hostRef.snapshots().listen((doc) {
+      if (_hasValidSessionDescription(doc.data())) {
+        if (!completer.isCompleted) completer.complete(true);
+      }
+    });
+
+    final ready = await completer.future;
+    await sub.cancel();
+    timer.cancel();
+    return ready;
+  }
+
   Future<void> joinCall() async {
     if (_disposed) return;
-    await _ensurePeerConnection();
+    _role = RoomCallRole.guest;
+    _emitConnectionState(RoomCallConnectionState.connecting);
+
+    await _resetPeerConnection();
     await _attachLocalMedia();
 
     final hostDoc = await _firestore
@@ -51,22 +136,26 @@ class RoomCallService {
         .collection('call')
         .doc('host')
         .get();
-    if (!hostDoc.exists) return;
-    final hostData = hostDoc.data();
-    if (hostData == null) return;
-    final hostSdp = hostData['sdp'] as String?;
-    final hostType = hostData['type'] as String?;
-    if ((hostSdp ?? '').isEmpty || (hostType ?? '').isEmpty) return;
+    if (!_hasValidSessionDescription(hostDoc.data())) {
+      throw Exception('Host video call is not ready yet.');
+    }
 
-    final offer = RTCSessionDescription(hostSdp, hostType);
-    await _peerConnection?.setRemoteDescription(offer);
-    _remoteDescriptionApplied = true;
+    final hostData = hostDoc.data()!;
+    _callGeneration = hostData['generation'] as int? ?? 0;
+    final offer = RTCSessionDescription(
+      hostData['sdp'] as String,
+      hostData['type'] as String,
+    );
 
     _peerConnection!.onIceCandidate = (RTCIceCandidate candidate) {
       _publishCandidate('guest', candidate);
     };
 
-    final answer = await _peerConnection!.createAnswer();
+    await _peerConnection?.setRemoteDescription(offer);
+    _remoteDescriptionApplied = true;
+    await _applyExistingCandidates('host');
+
+    final answer = await _peerConnection!.createAnswer(_offerAnswerConstraints);
     await _peerConnection?.setLocalDescription(answer);
 
     await _firestore
@@ -77,6 +166,7 @@ class RoomCallService {
         .set({
           'sdp': answer.sdp,
           'type': answer.type,
+          'generation': _callGeneration,
           'createdAt': FieldValue.serverTimestamp(),
         });
 
@@ -84,17 +174,105 @@ class RoomCallService {
     await _flushPendingRemoteCandidates();
   }
 
-  Future<void> _ensurePeerConnection() async {
-    if (_peerConnection != null) return;
+  Future<bool> hostOfferExists() async {
+    final hostDoc = await _firestore
+        .collection('rooms')
+        .doc(roomId)
+        .collection('call')
+        .doc('host')
+        .get();
+    return _hasValidSessionDescription(hostDoc.data());
+  }
+
+  Future<void> _resetPeerConnection() async {
+    await _candidatesSub?.cancel();
+    await _answerSub?.cancel();
+    _candidatesSub = null;
+    _answerSub = null;
+    _appliedCandidateDocIds.clear();
+    _pendingRemoteCandidates.clear();
+    _remoteDescriptionApplied = false;
+
+    for (final track in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
+      await track.stop();
+    }
+    await _localStream?.dispose();
+    _localStream = null;
+
+    for (final track in _remoteStream?.getTracks() ?? <MediaStreamTrack>[]) {
+      await track.stop();
+    }
+    await _remoteStream?.dispose();
+    _remoteStream = null;
+
+    if (_peerConnection != null) {
+      await _peerConnection!.close();
+      _peerConnection = null;
+    }
 
     _peerConnection = await createPeerConnection(_peerConfig);
+
     _peerConnection!.onTrack = (RTCTrackEvent event) {
-      if (event.streams.isEmpty) return;
-      _remoteStream = event.streams.first;
-      if (!_remoteStreamController.isClosed) {
-        _remoteStreamController.add(_remoteStream!);
+      unawaited(_handleRemoteTrack(event));
+    };
+
+    _peerConnection!.onAddStream = (MediaStream stream) {
+      unawaited(_handleRemoteStream(stream));
+    };
+
+    _peerConnection!.onConnectionState = (RTCPeerConnectionState state) {
+      debugPrint('RoomCallService: connectionState=$state');
+      switch (state) {
+        case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
+          _emitConnectionState(RoomCallConnectionState.connected);
+        case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
+          _emitConnectionState(RoomCallConnectionState.failed);
+        case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
+          _emitConnectionState(RoomCallConnectionState.disconnected);
+        default:
+          break;
       }
     };
+
+    _peerConnection!.onIceConnectionState = (RTCIceConnectionState state) {
+      debugPrint('RoomCallService: iceConnectionState=$state');
+      if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
+          state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
+        _emitConnectionState(RoomCallConnectionState.connected);
+      } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
+        _emitConnectionState(RoomCallConnectionState.failed);
+      }
+    };
+  }
+
+  Future<void> _handleRemoteTrack(RTCTrackEvent event) async {
+    if (_disposed) return;
+
+    MediaStream? stream;
+    if (event.streams.isNotEmpty) {
+      stream = event.streams.first;
+    } else {
+      final track = event.track;
+      _remoteStream ??= await createLocalMediaStream('remote');
+      final alreadyAdded = _remoteStream!
+          .getTracks()
+          .any((existing) => existing.id == track.id);
+      if (!alreadyAdded) {
+        await _remoteStream!.addTrack(track);
+      }
+      stream = _remoteStream;
+    }
+
+    await _handleRemoteStream(stream);
+  }
+
+  Future<void> _handleRemoteStream(MediaStream? stream) async {
+    if (_disposed || stream == null) return;
+    _remoteStream = stream;
+    if (!_remoteStreamController.isClosed) {
+      _remoteStreamController.add(stream);
+    }
+    _emitConnectionState(RoomCallConnectionState.connected);
   }
 
   Future<void> _attachLocalMedia() async {
@@ -126,7 +304,7 @@ class RoomCallService {
       _publishCandidate('host', candidate);
     };
 
-    final offer = await _peerConnection!.createOffer();
+    final offer = await _peerConnection!.createOffer(_offerAnswerConstraints);
     await _peerConnection!.setLocalDescription(offer);
 
     await _firestore
@@ -137,6 +315,7 @@ class RoomCallService {
         .set({
           'sdp': offer.sdp,
           'type': offer.type,
+          'generation': _callGeneration,
           'createdAt': FieldValue.serverTimestamp(),
         });
   }
@@ -150,28 +329,44 @@ class RoomCallService {
         .doc('guest')
         .snapshots()
         .listen((doc) async {
-          if (_disposed) return;
-          if (!doc.exists) return;
-          final data = doc.data();
-          if (data == null) return;
+          if (_disposed || _role != RoomCallRole.host) return;
+          if (!_hasValidSessionDescription(doc.data())) return;
           if (_remoteDescriptionApplied) return;
-          final sdp = data['sdp'] as String?;
-          final type = data['type'] as String?;
-          if ((sdp ?? '').isEmpty || (type ?? '').isEmpty) return;
-          final answer = RTCSessionDescription(sdp, type);
+
+          final data = doc.data()!;
+          final guestGeneration = data['generation'] as int? ?? 0;
+          if (data.containsKey('generation') &&
+              _callGeneration > 0 &&
+              guestGeneration != _callGeneration) {
+            return;
+          }
+
+          final answer = RTCSessionDescription(
+            data['sdp'] as String,
+            data['type'] as String,
+          );
           await _peerConnection?.setRemoteDescription(answer);
           _remoteDescriptionApplied = true;
+          await _applyExistingCandidates('guest');
           await _flushPendingRemoteCandidates();
         });
   }
 
   void _listenForGuestCandidates() {
+    _listenForCandidates('guest');
+  }
+
+  void _listenForHostCandidates() {
+    _listenForCandidates('host');
+  }
+
+  void _listenForCandidates(String peerDoc) {
     _candidatesSub?.cancel();
     _candidatesSub = _firestore
         .collection('rooms')
         .doc(roomId)
         .collection('call')
-        .doc('guest')
+        .doc(peerDoc)
         .collection('candidates')
         .snapshots()
         .listen((snapshot) async {
@@ -183,38 +378,36 @@ class RoomCallService {
         });
   }
 
-  void _listenForHostCandidates() {
-    _candidatesSub?.cancel();
-    _candidatesSub = _firestore
+  Future<void> _applyExistingCandidates(String peerDoc) async {
+    final snap = await _firestore
         .collection('rooms')
         .doc(roomId)
         .collection('call')
-        .doc('host')
+        .doc(peerDoc)
         .collection('candidates')
-        .snapshots()
-        .listen((snapshot) async {
-          if (_disposed) return;
-          for (final doc in snapshot.docs) {
-            if (!_appliedCandidateDocIds.add(doc.id)) continue;
-            await _handleRemoteCandidateMap(doc.data());
-          }
-        });
+        .get();
+    for (final doc in snap.docs) {
+      if (!_appliedCandidateDocIds.add(doc.id)) continue;
+      await _handleRemoteCandidateMap(doc.data());
+    }
   }
 
   void _publishCandidate(String peerDoc, RTCIceCandidate candidate) {
     if (_disposed) return;
-    if ((candidate.candidate ?? '').trim().isEmpty) return;
-    if ((candidate.sdpMid ?? '').isEmpty) return;
-    if (candidate.sdpMLineIndex == null || candidate.sdpMLineIndex! < 0) {
-      return;
-    }
+    final candidateStr = candidate.candidate?.trim() ?? '';
+    if (candidateStr.isEmpty) return;
+
     _firestore
         .collection('rooms')
         .doc(roomId)
         .collection('call')
         .doc(peerDoc)
         .collection('candidates')
-        .add(candidate.toMap());
+        .add({
+          'candidate': candidateStr,
+          'sdpMid': candidate.sdpMid ?? '',
+          'sdpMLineIndex': candidate.sdpMLineIndex ?? 0,
+        });
   }
 
   Future<void> _handleRemoteCandidateMap(Map<String, dynamic> data) async {
@@ -223,17 +416,20 @@ class RoomCallService {
     if ((candidateStr ?? '').trim().isEmpty) return;
 
     final sdpMid = data['sdpMid'] as String?;
-    if ((sdpMid ?? '').isEmpty) return;
     final rawIndex = data['sdpMLineIndex'];
-    int? sdpMLineIndex;
+    int sdpMLineIndex = 0;
     if (rawIndex is int) {
       sdpMLineIndex = rawIndex;
     } else if (rawIndex is num) {
       sdpMLineIndex = rawIndex.toInt();
     }
-    if (sdpMLineIndex == null || sdpMLineIndex < 0) return;
 
-    final candidate = RTCIceCandidate(candidateStr, sdpMid, sdpMLineIndex);
+    final candidate = RTCIceCandidate(
+      candidateStr,
+      (sdpMid == null || sdpMid.isEmpty) ? null : sdpMid,
+      sdpMLineIndex,
+    );
+
     if (!_remoteDescriptionApplied) {
       _pendingRemoteCandidates.add(candidate);
       return;
@@ -241,7 +437,8 @@ class RoomCallService {
 
     try {
       await _peerConnection?.addCandidate(candidate);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('RoomCallService: addCandidate failed: $e');
       _pendingRemoteCandidates.add(candidate);
     }
   }
@@ -254,24 +451,64 @@ class RoomCallService {
     for (final c in pending) {
       try {
         await _peerConnection?.addCandidate(c);
-      } catch (_) {
-        // Ignore stale candidates.
+      } catch (e) {
+        debugPrint('RoomCallService: flush candidate failed: $e');
       }
     }
   }
 
-  MediaStream? get localStream => _localStream;
-  MediaStream? get remoteStream => _remoteStream;
-  Stream<MediaStream> get remoteStreamUpdates => _remoteStreamController.stream;
+  bool _hasValidSessionDescription(Map<String, dynamic>? data) {
+    if (data == null) return false;
+    final sdp = data['sdp'] as String?;
+    final type = data['type'] as String?;
+    return (sdp ?? '').isNotEmpty && (type ?? '').isNotEmpty;
+  }
 
-  Future<bool> hostOfferExists() async {
-    final hostDoc = await _firestore
-        .collection('rooms')
-        .doc(roomId)
-        .collection('call')
-        .doc('host')
-        .get();
-    return hostDoc.exists;
+  void toggleAudioMuted(bool muted) {
+    for (final track in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
+      track.enabled = !muted;
+    }
+  }
+
+  void toggleVideoMuted(bool muted) {
+    for (final track in _localStream?.getVideoTracks() ?? <MediaStreamTrack>[]) {
+      track.enabled = !muted;
+    }
+  }
+
+  Future<void> switchCamera() async {
+    final videoTrack = _localStream?.getVideoTracks().firstOrNull;
+    if (videoTrack == null) return;
+    await Helper.switchCamera(videoTrack);
+  }
+
+  Future<void> _clearCallSignaling({required bool clearAll}) async {
+    final callRef = _firestore.collection('rooms').doc(roomId).collection('call');
+    await _deleteCandidates(callRef.doc('host'));
+    await _deleteCandidates(callRef.doc('guest'));
+    await callRef.doc('guest').delete();
+    if (clearAll) {
+      await callRef.doc('host').delete();
+    }
+  }
+
+  Future<void> _deleteCandidates(
+    DocumentReference<Map<String, dynamic>> peerRef,
+  ) async {
+    while (true) {
+      final snap = await peerRef.collection('candidates').limit(40).get();
+      if (snap.docs.isEmpty) break;
+      final batch = _firestore.batch();
+      for (final doc in snap.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
+  }
+
+  void _emitConnectionState(RoomCallConnectionState state) {
+    if (_connectionStateController.isClosed) return;
+    _connectionStateController.add(state);
   }
 
   Future<void> dispose() async {
@@ -295,8 +532,21 @@ class RoomCallService {
     _peerConnection = null;
     _localStream = null;
     _remoteStream = null;
+    _role = null;
+
     if (!_remoteStreamController.isClosed) {
       await _remoteStreamController.close();
     }
+    if (!_connectionStateController.isClosed) {
+      await _connectionStateController.close();
+    }
+  }
+}
+
+extension _FirstOrNull<E> on Iterable<E> {
+  E? get firstOrNull {
+    final iterator = this.iterator;
+    if (!iterator.moveNext()) return null;
+    return iterator.current;
   }
 }

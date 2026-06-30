@@ -25,6 +25,7 @@ import '../../domain/bloc/room_state.dart';
 import '../widgets/chat_message_bubble.dart';
 import '../widgets/report_message_dialog.dart';
 import '../widgets/room_share_sheet.dart';
+import '../widgets/room_video_call_bubbles.dart';
 import '../widgets/web_page_player_view.dart';
 import '../widgets/youtube_player_view.dart';
 import '../../domain/room_call_service.dart';
@@ -53,14 +54,18 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       GlobalKey<WebPagePlayerViewState>();
   RoomCallService? _callService;
   StreamSubscription<MediaStream>? _remoteStreamSub;
+  StreamSubscription<RoomCallConnectionState>? _callConnectionSub;
   MediaStream? _localCallStream;
   MediaStream? _remoteCallStream;
+  RoomCallConnectionState _callConnectionState = RoomCallConnectionState.idle;
+  bool _micMuted = false;
+  bool _cameraMuted = false;
   final _localRenderer = RTCVideoRenderer();
   final _remoteRenderer = RTCVideoRenderer();
   bool _renderersInitialized = false;
   bool _isCallConnecting = false;
   bool _videoBubbleVisible = false;
-  Offset _videoBubbleOffset = const Offset(16, 16);
+  Offset _remoteBubbleOffset = const Offset(16, 16);
   int _lastPlaybackVersionApplied = -1;
   //Avoid back-to-back YouTube drift seeks; each seek shows buffering/loading.
   DateTime? _lastYoutubeDriftSeekWallClock;
@@ -109,6 +114,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     _messageController.dispose();
     _videoController?.dispose();
     _remoteStreamSub?.cancel();
+    _callConnectionSub?.cancel();
     unawaited(_callService?.dispose());
     _localRenderer.dispose();
     _remoteRenderer.dispose();
@@ -133,41 +139,113 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     _isCallConnecting = true;
     try {
       await _initializeCallRenderers();
-      if (_callService == null) {
-        _callService = RoomCallService(state.roomId);
-        _remoteStreamSub = _callService!.remoteStreamUpdates.listen((stream) {
-          if (!mounted) return;
-          setState(() {
-            _remoteCallStream = stream;
-            if (_renderersInitialized) {
-              _remoteRenderer.srcObject = stream;
-            }
-            _videoBubbleVisible = true;
-          });
+      _callService ??= RoomCallService(state.roomId);
+
+      _remoteStreamSub ??= _callService!.remoteStreamUpdates.listen((stream) {
+        if (!mounted) return;
+        setState(() {
+          _remoteCallStream = stream;
+          if (_renderersInitialized) {
+            _remoteRenderer.srcObject = null;
+            _remoteRenderer.srcObject = stream;
+          }
+          _videoBubbleVisible = true;
         });
-      }
-      final canJoin = await _callService!.hostOfferExists();
-      if (canJoin) {
-        await _callService!.joinCall();
+      });
+
+      _callConnectionSub ??=
+          _callService!.connectionStateUpdates.listen((callState) {
+        if (!mounted) return;
+        setState(() => _callConnectionState = callState);
+      });
+
+      final uid = fb.FirebaseAuth.instance.currentUser?.uid;
+      final isRoomHost = uid != null && uid == state.hostId;
+
+      if (isRoomHost) {
+        await _callService!.startCall(clearExisting: true);
       } else {
-        await _callService!.startCall();
+        final ready = await _callService!.waitForHostOffer();
+        if (!ready) {
+          throw Exception(
+            'The room host has not started the video call yet. Ask them to tap the camera icon first.',
+          );
+        }
+        await _callService!.joinCall();
       }
+
       if (!mounted) return;
       setState(() {
         _localCallStream = _callService!.localStream;
         _remoteCallStream = _callService!.remoteStream;
         if (_renderersInitialized) {
           _localRenderer.srcObject = _localCallStream;
-          _remoteRenderer.srcObject = _remoteCallStream;
+          if (_remoteCallStream != null) {
+            _remoteRenderer.srcObject = _remoteCallStream;
+          }
         }
         _videoBubbleVisible = true;
+        _callConnectionState = RoomCallConnectionState.connecting;
       });
     } catch (e, st) {
       debugPrint('RoomPage: video call failed: $e\n$st');
+      await _remoteStreamSub?.cancel();
+      await _callConnectionSub?.cancel();
+      _remoteStreamSub = null;
+      _callConnectionSub = null;
+      await _callService?.dispose();
+      _callService = null;
+      if (mounted) {
+        setState(() {
+          _localCallStream = null;
+          _remoteCallStream = null;
+          _videoBubbleVisible = false;
+          _callConnectionState = RoomCallConnectionState.idle;
+          if (_renderersInitialized) {
+            _localRenderer.srcObject = null;
+            _remoteRenderer.srcObject = null;
+          }
+        });
+      }
       rethrow;
     } finally {
       _isCallConnecting = false;
     }
+  }
+
+  Future<void> _endVideoCall() async {
+    await _remoteStreamSub?.cancel();
+    await _callConnectionSub?.cancel();
+    _remoteStreamSub = null;
+    _callConnectionSub = null;
+    await _callService?.dispose();
+    _callService = null;
+
+    if (!mounted) return;
+    setState(() {
+      _localCallStream = null;
+      _remoteCallStream = null;
+      _videoBubbleVisible = false;
+      _callConnectionState = RoomCallConnectionState.idle;
+      _micMuted = false;
+      _cameraMuted = false;
+      if (_renderersInitialized) {
+        _localRenderer.srcObject = null;
+        _remoteRenderer.srcObject = null;
+      }
+    });
+  }
+
+  void _toggleCallMic() {
+    final muted = !_micMuted;
+    _callService?.toggleAudioMuted(muted);
+    setState(() => _micMuted = muted);
+  }
+
+  void _toggleCallCamera() {
+    final muted = !_cameraMuted;
+    _callService?.toggleVideoMuted(muted);
+    setState(() => _cameraMuted = muted);
   }
 
   Future<void> _toggleCallBubble(RoomState state) async {
@@ -184,6 +262,19 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     try {
       if (_localCallStream == null) {
         await _startOrJoinCall(state);
+        if (!mounted) return;
+        final uid = fb.FirebaseAuth.instance.currentUser?.uid;
+        final isRoomHost = uid != null && uid == state.hostId;
+        if (isRoomHost && _notifySystemAlerts) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Video call started. Ask your friend to open this room and tap the camera icon.',
+              ),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
       } else {
         if (!mounted) return;
         setState(() => _videoBubbleVisible = !_videoBubbleVisible);
@@ -671,7 +762,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                 const SizedBox(width: 8),
               ],
             ),
-      body: Container(
+      body: Stack(
+        children: [
+          Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -871,10 +964,6 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                   return Stack(
                     children: [
                       content,
-                      if (_videoBubbleVisible &&
-                          _remoteCallStream != null &&
-                          _renderersInitialized)
-                        _buildRemoteVideoBubble(),
                     ],
                   );
                 },
@@ -882,6 +971,8 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
             ),
           ),
         ),
+      ),
+        ],
       ),
     );
   }
@@ -1231,7 +1322,11 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                     ),
                     const SizedBox(width: 12),
                     IconButton(
-                      tooltip: 'Video bubble',
+                      tooltip: _localCallStream != null
+                          ? (_videoBubbleVisible
+                              ? 'Hide call bubbles'
+                              : 'Show call bubbles')
+                          : 'Start video call',
                       onPressed: () => unawaited(_toggleCallBubble(state)),
                       icon: Icon(
                         _videoBubbleVisible
@@ -1247,88 +1342,18 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
             if (_localCallStream != null &&
                 _videoBubbleVisible &&
                 _renderersInitialized)
-              Padding(
-                padding: const EdgeInsets.only(
-                  left: AppConstants.spacingMedium,
-                  right: AppConstants.spacingMedium,
-                  bottom: AppConstants.spacingSmall,
-                ),
-                child: SizedBox(
-                  height: 120,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(
-                      AppConstants.borderRadiusMedium,
-                    ),
-                    child: RTCVideoView(_localRenderer, mirror: true),
-                  ),
-                ),
+              RoomCallLocalStrip(
+                renderer: _localRenderer,
+                renderersReady: _renderersInitialized,
+                micMuted: _micMuted,
+                cameraMuted: _cameraMuted,
+                onToggleMic: _toggleCallMic,
+                onToggleCamera: _toggleCallCamera,
+                onSwitchCamera: () => unawaited(_callService?.switchCamera()),
+                onEndCall: () => unawaited(_endVideoCall()),
               ),
           ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildRemoteVideoBubble() {
-    return Positioned(
-      right: _videoBubbleOffset.dx,
-      bottom: _videoBubbleOffset.dy,
-      child: GestureDetector(
-        onPanUpdate: (details) {
-          if (!mounted) return;
-          setState(() {
-            _videoBubbleOffset = Offset(
-              (_videoBubbleOffset.dx - details.delta.dx).clamp(8, 220),
-              (_videoBubbleOffset.dy - details.delta.dy).clamp(8, 420),
-            );
-          });
-        },
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            width: 140,
-            height: 190,
-            decoration: BoxDecoration(
-              color: Colors.black87,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white24),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black45,
-                  blurRadius: 12,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: Stack(
-                children: [
-                  Positioned.fill(child: RTCVideoView(_remoteRenderer)),
-                  Positioned(
-                    top: 4,
-                    right: 4,
-                    child: InkWell(
-                      onTap: () => setState(() => _videoBubbleVisible = false),
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.close,
-                          size: 16,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -1348,7 +1373,16 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
 
     return BlocBuilder<RoomBloc, RoomState>(
       builder: (context, roomState) {
-        return Container(
+        final uid = fb.FirebaseAuth.instance.currentUser?.uid;
+        final isRoomHost = uid != null && uid == roomState.hostId;
+        final callBubblesActive = _localCallStream != null &&
+            _videoBubbleVisible &&
+            _renderersInitialized;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
           decoration: BoxDecoration(
             color: isDark ? AppColors.primaryDarkVariant : AppColors.lightSurface,
             borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
@@ -1489,6 +1523,38 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
               ),
             ],
           ),
+        ),
+            if (callBubblesActive)
+              Positioned(
+                right: _remoteBubbleOffset.dx,
+                bottom: _remoteBubbleOffset.dy + 56,
+                child: GestureDetector(
+                  onPanUpdate: (details) {
+                    if (!mounted) return;
+                    setState(() {
+                      _remoteBubbleOffset = Offset(
+                        (_remoteBubbleOffset.dx - details.delta.dx).clamp(
+                          8,
+                          220,
+                        ),
+                        (_remoteBubbleOffset.dy - details.delta.dy).clamp(
+                          8,
+                          360,
+                        ),
+                      );
+                    });
+                  },
+                  child: RoomCallRemoteBubble(
+                    renderer: _remoteRenderer,
+                    renderersReady: _renderersInitialized,
+                    hasRemoteStream: _remoteCallStream != null,
+                    connectionState: _callConnectionState,
+                    isRoomHost: isRoomHost,
+                    onClose: () => unawaited(_endVideoCall()),
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );
