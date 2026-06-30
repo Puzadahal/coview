@@ -123,8 +123,10 @@ class RoomCallRemoteBubble extends StatelessWidget {
   final RTCVideoRenderer renderer;
   final bool renderersReady;
   final bool hasRemoteStream;
+  final bool hasRemoteVideo;
   final RoomCallConnectionState connectionState;
   final bool isRoomHost;
+  final String remoteParticipantName;
   final VoidCallback onClose;
 
   const RoomCallRemoteBubble({
@@ -132,19 +134,22 @@ class RoomCallRemoteBubble extends StatelessWidget {
     required this.renderer,
     required this.renderersReady,
     required this.hasRemoteStream,
+    required this.hasRemoteVideo,
     required this.connectionState,
     required this.isRoomHost,
+    required this.remoteParticipantName,
     required this.onClose,
   });
 
   String get _statusLabel {
-    if (hasRemoteStream && renderersReady) return 'Friend';
+    if (hasRemoteVideo && renderersReady) return remoteParticipantName;
+    if (hasRemoteStream && renderersReady) return remoteParticipantName;
     return switch (connectionState) {
       RoomCallConnectionState.connecting when isRoomHost => 'Waiting…',
       RoomCallConnectionState.connecting => 'Joining…',
       RoomCallConnectionState.failed => 'Failed',
       RoomCallConnectionState.connected => 'Connected',
-      _ when isRoomHost => 'Waiting for friend',
+      _ when isRoomHost => 'Waiting…',
       _ => 'Connecting…',
     };
   }
@@ -166,10 +171,24 @@ class RoomCallRemoteBubble extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (hasRemoteStream && renderersReady)
+            if (hasRemoteVideo && renderersReady)
               RTCVideoView(
                 renderer,
                 objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+              )
+            else if (hasRemoteStream && renderersReady)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    '$remoteParticipantName\n(camera off or loading)',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.75),
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
               )
             else
               Center(
@@ -192,8 +211,8 @@ class RoomCallRemoteBubble extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         isRoomHost
-                            ? 'Ask friend to tap camera'
-                            : 'Waiting for video…',
+                            ? 'Waiting for someone to join…'
+                            : 'Waiting for $remoteParticipantName…',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.75),

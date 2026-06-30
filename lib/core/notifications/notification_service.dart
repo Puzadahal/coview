@@ -31,9 +31,13 @@ class NotificationService {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _roomsSub;
   final Map<String, StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>
       _roomMessageSubs = {};
+  final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>>
+      _roomCallInviteSubs = {};
   final Map<String, DateTime> _roomLastSeen = {};
   final Set<String> _seenInviteIds = {};
   final Set<String> _seenSystemAlertIds = {};
+  final Set<String> _seenCallInviteKeys = {};
+  final Map<String, int> _roomCallInviteGeneration = {};
 
   NotificationPreferences get preferences => _preferences;
 
@@ -218,7 +222,9 @@ class NotificationService {
         final roomId = change.doc.id;
         if (change.type == DocumentChangeType.removed) {
           _roomMessageSubs.remove(roomId)?.cancel();
+          _roomCallInviteSubs.remove(roomId)?.cancel();
           _roomLastSeen.remove(roomId);
+          _roomCallInviteGeneration.remove(roomId);
           continue;
         }
         final roomData = change.doc.data() ?? {};
@@ -256,6 +262,45 @@ class NotificationService {
             payload: '/join/$roomId',
           );
         });
+        _roomCallInviteSubs[roomId]?.cancel();
+        _roomCallInviteSubs[roomId] = FirebaseFirestore.instance
+            .collection('rooms')
+            .doc(roomId)
+            .collection('call')
+            .doc('invite')
+            .snapshots()
+            .listen((inviteDoc) {
+          final data = inviteDoc.data();
+          if (data == null) return;
+          final active = data['active'] == true;
+          final generation = data['generation'] as int? ?? 0;
+          final hostId = data['hostId'] as String? ?? '';
+          if (hostId == userId) return;
+
+          final lastGen = _roomCallInviteGeneration[roomId];
+          if (lastGen == null) {
+            _roomCallInviteGeneration[roomId] = generation;
+            return;
+          }
+          if (!active || generation <= lastGen) {
+            if (!active) _roomCallInviteGeneration[roomId] = 0;
+            return;
+          }
+          _roomCallInviteGeneration[roomId] = generation;
+
+          final key = '$roomId-$generation';
+          if (_seenCallInviteKeys.contains(key)) return;
+          _seenCallInviteKeys.add(key);
+
+          if (!_preferences.pushEnabled || !_preferences.systemAlerts) return;
+
+          final hostName = data['hostName'] as String? ?? 'Someone';
+          _showLocalNotification(
+            title: 'Video call in $roomName',
+            body: '$hostName started a video call. Tap to join.',
+            payload: '/join/$roomId',
+          );
+        });
       }
     });
   }
@@ -270,10 +315,16 @@ class NotificationService {
     for (final sub in _roomMessageSubs.values) {
       await sub.cancel();
     }
+    for (final sub in _roomCallInviteSubs.values) {
+      await sub.cancel();
+    }
     _roomMessageSubs.clear();
+    _roomCallInviteSubs.clear();
     _roomLastSeen.clear();
+    _roomCallInviteGeneration.clear();
     _seenInviteIds.clear();
     _seenSystemAlertIds.clear();
+    _seenCallInviteKeys.clear();
   }
 
   Future<void> _showLocalNotification({

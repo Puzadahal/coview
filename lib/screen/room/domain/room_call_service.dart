@@ -75,7 +75,12 @@ class RoomCallService {
   MediaStream? get remoteStream => _remoteStream;
   RoomCallRole? get role => _role;
 
-  Future<void> startCall({bool clearExisting = true}) async {
+  Future<void> startCall({
+    bool clearExisting = true,
+    String? hostId,
+    String? hostName,
+    String? roomName,
+  }) async {
     if (_disposed) return;
     _role = RoomCallRole.host;
     _emitConnectionState(RoomCallConnectionState.connecting);
@@ -87,7 +92,12 @@ class RoomCallService {
     await _resetPeerConnection();
     await _attachLocalMedia();
     _callGeneration = DateTime.now().millisecondsSinceEpoch;
-    await _publishHostOffer();
+    await _publishHostOffer(hostId: hostId, hostName: hostName);
+    await _publishCallInvite(
+      hostId: hostId,
+      hostName: hostName,
+      roomName: roomName,
+    );
     _listenForGuestAnswer();
     _listenForGuestCandidates();
   }
@@ -122,7 +132,10 @@ class RoomCallService {
     return ready;
   }
 
-  Future<void> joinCall() async {
+  Future<void> joinCall({
+    String? guestId,
+    String? guestName,
+  }) async {
     if (_disposed) return;
     _role = RoomCallRole.guest;
     _emitConnectionState(RoomCallConnectionState.connecting);
@@ -167,6 +180,8 @@ class RoomCallService {
           'sdp': answer.sdp,
           'type': answer.type,
           'generation': _callGeneration,
+          'participantId': guestId ?? '',
+          'participantName': guestName ?? 'Guest',
           'createdAt': FieldValue.serverTimestamp(),
         });
 
@@ -239,6 +254,7 @@ class RoomCallService {
       if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
           state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
         _emitConnectionState(RoomCallConnectionState.connected);
+        unawaited(_syncRemoteTracksFromReceivers());
       } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
         _emitConnectionState(RoomCallConnectionState.failed);
       }
@@ -247,6 +263,8 @@ class RoomCallService {
 
   Future<void> _handleRemoteTrack(RTCTrackEvent event) async {
     if (_disposed) return;
+
+    event.track.enabled = true;
 
     MediaStream? stream;
     if (event.streams.isNotEmpty) {
@@ -263,7 +281,41 @@ class RoomCallService {
       stream = _remoteStream;
     }
 
+    if (stream == null) return;
+
+    for (final track in stream.getVideoTracks()) {
+      track.enabled = true;
+    }
+
     await _handleRemoteStream(stream);
+    unawaited(_syncRemoteTracksFromReceivers());
+  }
+
+  Future<void> _syncRemoteTracksFromReceivers() async {
+    if (_disposed || _peerConnection == null) return;
+
+    try {
+      final receivers = await _peerConnection!.getReceivers();
+      MediaStream? stream = _remoteStream;
+      var changed = false;
+
+      for (final receiver in receivers) {
+        final track = receiver.track;
+        if (track == null) continue;
+        track.enabled = true;
+        stream ??= await createLocalMediaStream('remote');
+        if (!stream.getTracks().any((existing) => existing.id == track.id)) {
+          await stream.addTrack(track);
+          changed = true;
+        }
+      }
+
+      if (stream != null && (changed || _remoteStream == null)) {
+        await _handleRemoteStream(stream);
+      }
+    } catch (e) {
+      debugPrint('RoomCallService: sync receivers failed: $e');
+    }
   }
 
   Future<void> _handleRemoteStream(MediaStream? stream) async {
@@ -299,7 +351,10 @@ class RoomCallService {
     }
   }
 
-  Future<void> _publishHostOffer() async {
+  Future<void> _publishHostOffer({
+    String? hostId,
+    String? hostName,
+  }) async {
     _peerConnection!.onIceCandidate = (RTCIceCandidate candidate) {
       _publishCandidate('host', candidate);
     };
@@ -316,8 +371,44 @@ class RoomCallService {
           'sdp': offer.sdp,
           'type': offer.type,
           'generation': _callGeneration,
+          'participantId': hostId ?? '',
+          'participantName': hostName ?? 'Host',
           'createdAt': FieldValue.serverTimestamp(),
         });
+  }
+
+  Future<void> _publishCallInvite({
+    String? hostId,
+    String? hostName,
+    String? roomName,
+  }) async {
+    if (_disposed) return;
+    await _firestore
+        .collection('rooms')
+        .doc(roomId)
+        .collection('call')
+        .doc('invite')
+        .set({
+          'active': true,
+          'generation': _callGeneration,
+          'hostId': hostId ?? '',
+          'hostName': hostName ?? 'Room host',
+          'roomName': roomName ?? 'Watch room',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+  }
+
+  Future<void> _clearCallInvite() async {
+    try {
+      await _firestore
+          .collection('rooms')
+          .doc(roomId)
+          .collection('call')
+          .doc('invite')
+          .set({'active': false}, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('RoomCallService: clear invite failed: $e');
+    }
   }
 
   void _listenForGuestAnswer() {
@@ -487,6 +578,7 @@ class RoomCallService {
     await _deleteCandidates(callRef.doc('host'));
     await _deleteCandidates(callRef.doc('guest'));
     await callRef.doc('guest').delete();
+    await _clearCallInvite();
     if (clearAll) {
       await callRef.doc('host').delete();
     }
@@ -513,6 +605,7 @@ class RoomCallService {
 
   Future<void> dispose() async {
     _disposed = true;
+    await _clearCallInvite();
     await _candidatesSub?.cancel();
     await _answerSub?.cancel();
     _appliedCandidateDocIds.clear();

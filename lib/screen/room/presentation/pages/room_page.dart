@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -66,6 +67,11 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   bool _isCallConnecting = false;
   bool _videoBubbleVisible = false;
   Offset _remoteBubbleOffset = const Offset(16, 16);
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _incomingCallSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _remoteNameSub;
+  bool _incomingCallPrimed = false;
+  int _lastSeenCallGeneration = 0;
+  String _remoteParticipantName = 'Guest';
   int _lastPlaybackVersionApplied = -1;
   //Avoid back-to-back YouTube drift seeks; each seek shows buffering/loading.
   DateTime? _lastYoutubeDriftSeekWallClock;
@@ -82,6 +88,75 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   int _lastKnownMessageCount = 0;
 
   bool get _videoOnlyLayout => _youtubeImmersive || _manualVideoOnly;
+
+  bool get _hasRemoteVideo {
+    final stream = _remoteCallStream;
+    if (stream == null) return false;
+    final tracks = stream.getVideoTracks();
+    return tracks.isNotEmpty && tracks.any((track) => track.enabled);
+  }
+
+  String _fallbackRemoteName(RoomState state, bool isRoomHost) {
+    if (!isRoomHost && state.hostId != null) {
+      for (final message in state.messages.reversed) {
+        if (message.authorId == state.hostId) {
+          return message.author;
+        }
+      }
+      return 'Host';
+    }
+    for (final message in state.messages.reversed) {
+      if (message.authorId != null && message.authorId != state.hostId) {
+        return message.author;
+      }
+    }
+    return 'Guest';
+  }
+
+  void _listenForRemoteParticipantName(bool isRoomHost) {
+    _remoteNameSub?.cancel();
+    final peerDoc = isRoomHost ? 'guest' : 'host';
+    _remoteNameSub = FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(widget.roomId)
+        .collection('call')
+        .doc(peerDoc)
+        .snapshots()
+        .listen((doc) {
+      if (!mounted) return;
+      final name = doc.data()?['participantName'] as String?;
+      if (name == null || name.trim().isEmpty) return;
+      setState(() => _remoteParticipantName = name.trim());
+    });
+  }
+
+  void _primeRemoteParticipantName(RoomState state, bool isRoomHost) {
+    _remoteParticipantName = _fallbackRemoteName(state, isRoomHost);
+    if (!isRoomHost) {
+      unawaited(
+        FirebaseFirestore.instance
+            .collection('rooms')
+            .doc(widget.roomId)
+            .collection('call')
+            .doc('invite')
+            .get()
+            .then((doc) {
+          if (!mounted) return;
+          final inviteName = doc.data()?['hostName'] as String?;
+          if (inviteName != null && inviteName.trim().isNotEmpty) {
+            setState(() => _remoteParticipantName = inviteName.trim());
+          }
+        }),
+      );
+    }
+    _listenForRemoteParticipantName(isRoomHost);
+  }
+
+  void _bindRemoteRenderer() {
+    if (!_renderersInitialized || _remoteCallStream == null) return;
+    _remoteRenderer.srcObject = null;
+    _remoteRenderer.srcObject = _remoteCallStream;
+  }
 
   @override
   void initState() {
@@ -115,6 +190,8 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     _videoController?.dispose();
     _remoteStreamSub?.cancel();
     _callConnectionSub?.cancel();
+    _incomingCallSub?.cancel();
+    _remoteNameSub?.cancel();
     unawaited(_callService?.dispose());
     _localRenderer.dispose();
     _remoteRenderer.dispose();
@@ -145,10 +222,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
         if (!mounted) return;
         setState(() {
           _remoteCallStream = stream;
-          if (_renderersInitialized) {
-            _remoteRenderer.srcObject = null;
-            _remoteRenderer.srcObject = stream;
-          }
+          _bindRemoteRenderer();
           _videoBubbleVisible = true;
         });
       });
@@ -156,6 +230,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       _callConnectionSub ??=
           _callService!.connectionStateUpdates.listen((callState) {
         if (!mounted) return;
+        if (callState == RoomCallConnectionState.connected) {
+          _bindRemoteRenderer();
+        }
         setState(() => _callConnectionState = callState);
       });
 
@@ -163,15 +240,29 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       final isRoomHost = uid != null && uid == state.hostId;
 
       if (isRoomHost) {
-        await _callService!.startCall(clearExisting: true);
+        final hostName = fb.FirebaseAuth.instance.currentUser?.displayName ??
+            'Room host';
+        _primeRemoteParticipantName(state, true);
+        await _callService!.startCall(
+          clearExisting: true,
+          hostId: uid,
+          hostName: hostName,
+          roomName: state.roomName,
+        );
       } else {
+        _primeRemoteParticipantName(state, false);
         final ready = await _callService!.waitForHostOffer();
         if (!ready) {
           throw Exception(
             'The room host has not started the video call yet. Ask them to tap the camera icon first.',
           );
         }
-        await _callService!.joinCall();
+        final guestName =
+            fb.FirebaseAuth.instance.currentUser?.displayName ?? 'Guest';
+        await _callService!.joinCall(
+          guestId: uid,
+          guestName: guestName,
+        );
       }
 
       if (!mounted) return;
@@ -180,9 +271,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
         _remoteCallStream = _callService!.remoteStream;
         if (_renderersInitialized) {
           _localRenderer.srcObject = _localCallStream;
-          if (_remoteCallStream != null) {
-            _remoteRenderer.srcObject = _remoteCallStream;
-          }
+          _bindRemoteRenderer();
         }
         _videoBubbleVisible = true;
         _callConnectionState = RoomCallConnectionState.connecting;
@@ -218,6 +307,8 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     await _callConnectionSub?.cancel();
     _remoteStreamSub = null;
     _callConnectionSub = null;
+    await _remoteNameSub?.cancel();
+    _remoteNameSub = null;
     await _callService?.dispose();
     _callService = null;
 
@@ -229,11 +320,65 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       _callConnectionState = RoomCallConnectionState.idle;
       _micMuted = false;
       _cameraMuted = false;
+      _remoteParticipantName = 'Guest';
       if (_renderersInitialized) {
         _localRenderer.srcObject = null;
         _remoteRenderer.srcObject = null;
       }
     });
+  }
+
+  void _listenForIncomingCall(RoomState state) {
+    if (_incomingCallSub != null) return;
+    final uid = fb.FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid == state.hostId) return;
+    if (!state.videoCallEnabled) return;
+
+    _incomingCallSub?.cancel();
+    _incomingCallSub = FirebaseFirestore.instance
+        .collection('rooms')
+        .doc(widget.roomId)
+        .collection('call')
+        .doc('invite')
+        .snapshots()
+        .listen((doc) {
+      if (!mounted) return;
+      final data = doc.data();
+      final active = data?['active'] == true;
+      final generation = data?['generation'] as int? ?? 0;
+
+      if (!_incomingCallPrimed) {
+        _incomingCallPrimed = true;
+        _lastSeenCallGeneration = generation;
+        return;
+      }
+
+      if (!active || generation <= _lastSeenCallGeneration) {
+        if (!active) _lastSeenCallGeneration = 0;
+        return;
+      }
+      if (_localCallStream != null || _isCallConnecting) return;
+
+      _lastSeenCallGeneration = generation;
+      _showIncomingCallPrompt(state, data ?? {});
+    });
+  }
+
+  void _showIncomingCallPrompt(RoomState state, Map<String, dynamic> data) {
+    if (!_notifySystemAlerts) return;
+    final hostName = data['hostName'] as String? ?? 'The host';
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 12),
+        content: Text('$hostName started a video call. Join now?'),
+        action: SnackBarAction(
+          label: 'Join',
+          onPressed: () => unawaited(_toggleCallBubble(state)),
+        ),
+      ),
+    );
   }
 
   void _toggleCallMic() {
@@ -836,6 +981,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                     state.status == RoomStatus.viewing;
                 _listenerPrevStatus = state.status;
                 if (state.status != RoomStatus.viewing) return;
+                if (cameFromLoading) {
+                  _listenForIncomingCall(state);
+                }
                 final force = cameFromLoading;
                 unawaited(_applyPlaybackFromFirestore(state, force: force));
               },
@@ -1548,8 +1696,12 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                     renderer: _remoteRenderer,
                     renderersReady: _renderersInitialized,
                     hasRemoteStream: _remoteCallStream != null,
+                    hasRemoteVideo: _hasRemoteVideo,
                     connectionState: _callConnectionState,
                     isRoomHost: isRoomHost,
+                    remoteParticipantName: _remoteParticipantName.isNotEmpty
+                        ? _remoteParticipantName
+                        : _fallbackRemoteName(roomState, isRoomHost),
                     onClose: () => unawaited(_endVideoCall()),
                   ),
                 ),
