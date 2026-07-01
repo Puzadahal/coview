@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -28,6 +29,7 @@ class RoomCallService {
   MediaStream? _remoteStream;
   final _firestore = FirebaseFirestore.instance;
   final _remoteStreamController = StreamController<MediaStream>.broadcast();
+  final _localStreamController = StreamController<MediaStream>.broadcast();
   final _connectionStateController =
       StreamController<RoomCallConnectionState>.broadcast();
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _candidatesSub;
@@ -62,6 +64,7 @@ class RoomCallService {
   };
 
   Stream<MediaStream> get remoteStreamUpdates => _remoteStreamController.stream;
+  Stream<MediaStream> get localStreamUpdates => _localStreamController.stream;
   Stream<RoomCallConnectionState> get connectionStateUpdates =>
       _connectionStateController.stream;
 
@@ -76,6 +79,7 @@ class RoomCallService {
     String? roomName,
   }) async {
     if (_disposed) return;
+    _enableMobileRelayIfNeeded();
     _role = RoomCallRole.host;
     _emitConnectionState(RoomCallConnectionState.connecting);
 
@@ -134,6 +138,7 @@ class RoomCallService {
 
   Future<void> joinCall({String? guestId, String? guestName}) async {
     if (_disposed) return;
+    _enableMobileRelayIfNeeded();
     _role = RoomCallRole.guest;
     _emitConnectionState(RoomCallConnectionState.connecting);
 
@@ -171,7 +176,7 @@ class RoomCallService {
 
     final answer = await _peerConnection!.createAnswer(_offerAnswerConstraints);
     await _peerConnection!.setLocalDescription(answer);
-    final local = await _localDescriptionWithCandidates();
+    final local = await _localDescriptionForSignaling();
     final sdp = local?.sdp ?? answer.sdp;
     final type = local?.type ?? answer.type;
 
@@ -290,41 +295,24 @@ class RoomCallService {
     };
   }
 
-  Future<void> _waitForIceGatheringComplete() async {
-    final pc = _peerConnection;
-    if (pc == null || _disposed) return;
-
-    if (pc.iceGatheringState ==
-        RTCIceGatheringState.RTCIceGatheringStateComplete) {
-      return;
-    }
-
-    final completer = Completer<void>();
-    pc.onIceGatheringState = (RTCIceGatheringState state) {
-      debugPrint('RoomCallService: iceGatheringState=$state');
-      if (state == RTCIceGatheringState.RTCIceGatheringStateComplete &&
-          !completer.isCompleted) {
-        completer.complete();
-      }
-    };
-
-    try {
-      await completer.future.timeout(
-        const Duration(seconds: 2),
-        onTimeout: () {
-          debugPrint(
-            'RoomCallService: ICE gathering timed out — publishing SDP anyway',
-          );
-        },
-      );
-    } catch (e) {
-      debugPrint('RoomCallService: ICE gathering wait error: $e');
-    }
+  Future<RTCSessionDescription?> _localDescriptionForSignaling() async {
+    return _peerConnection?.getLocalDescription();
   }
 
-  Future<RTCSessionDescription?> _localDescriptionWithCandidates() async {
-    await _waitForIceGatheringComplete();
-    return _peerConnection?.getLocalDescription();
+  void _enableMobileRelayIfNeeded() {
+    if (kIsWeb) return;
+    try {
+      if (Platform.isAndroid || Platform.isIOS) {
+        _forceRelay = true;
+        debugPrint('RoomCallService: mobile → TURN relay enabled');
+      }
+    } catch (_) {}
+  }
+
+  void _emitLocalStream() {
+    final stream = _localStream;
+    if (stream == null || _localStreamController.isClosed) return;
+    _localStreamController.add(stream);
   }
 
   Future<void> _attemptIceRecovery() async {
@@ -351,7 +339,7 @@ class RoomCallService {
           'offerToReceiveVideo': true,
         });
         await _peerConnection!.setLocalDescription(offer);
-        final local = await _localDescriptionWithCandidates();
+        final local = await _localDescriptionForSignaling();
         if (local == null || _disposed) return;
         await _firestore
             .collection('rooms')
@@ -374,7 +362,7 @@ class RoomCallService {
           'offerToReceiveVideo': true,
         });
         await _peerConnection!.setLocalDescription(answer);
-        final local = await _localDescriptionWithCandidates();
+        final local = await _localDescriptionForSignaling();
         if (local == null || _disposed) return;
         await _firestore
             .collection('rooms')
@@ -523,6 +511,7 @@ class RoomCallService {
         await pc.addTrack(track, _localStream!);
       }
     }
+    _emitLocalStream();
   }
 
   Future<void> _publishHostOffer({String? hostId, String? hostName}) async {
@@ -532,7 +521,7 @@ class RoomCallService {
 
     final offer = await _peerConnection!.createOffer(_offerAnswerConstraints);
     await _peerConnection!.setLocalDescription(offer);
-    final local = await _localDescriptionWithCandidates();
+    final local = await _localDescriptionForSignaling();
     final sdp = local?.sdp ?? offer.sdp;
     final type = local?.type ?? offer.type;
 
@@ -621,7 +610,7 @@ class RoomCallService {
               _offerAnswerConstraints,
             );
             await _peerConnection!.setLocalDescription(answer);
-            final local = await _localDescriptionWithCandidates();
+            final local = await _localDescriptionForSignaling();
 
             await _firestore
                 .collection('rooms')
@@ -938,7 +927,7 @@ class RoomCallService {
       final answer =
           await _peerConnection!.createAnswer(_offerAnswerConstraints);
       await _peerConnection!.setLocalDescription(answer);
-      final local = await _localDescriptionWithCandidates();
+      final local = await _localDescriptionForSignaling();
       await _firestore
           .collection('rooms')
           .doc(roomId)
@@ -1009,6 +998,9 @@ class RoomCallService {
 
     if (!_remoteStreamController.isClosed) {
       await _remoteStreamController.close();
+    }
+    if (!_localStreamController.isClosed) {
+      await _localStreamController.close();
     }
     if (!_connectionStateController.isClosed) {
       await _connectionStateController.close();

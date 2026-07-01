@@ -96,27 +96,14 @@ class _LoginPageContentState extends State<_LoginPageContent> {
         ? _emailController.text.trim()
         : loginEmail;
 
-    final email = await showDialog<String>(
+    await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => _ForgotPasswordDialog(initialEmail: initial),
     );
-
-    if (email == null || !mounted) return;
-    if (!_emailLooksValid(email)) {
-      AppSnackBar.error(context, 'Enter a valid email address.');
-      return;
-    }
-    try {
-      await fb_auth.FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      if (!mounted) return;
-      AppSnackBar.success(context, 'Password reset sent to $email');
-    } on fb_auth.FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      AppSnackBar.error(context, e.message ?? 'Could not send reset email');
-    }
   }
 
-  bool _emailLooksValid(String email) =>
+  static bool _emailLooksValid(String email) =>
       email.contains('@') &&
       email.length > 3 &&
       !email.startsWith('@') &&
@@ -440,6 +427,10 @@ class _ForgotPasswordDialog extends StatefulWidget {
 
 class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
   late final TextEditingController _emailController;
+  bool _sending = false;
+  bool _sent = false;
+  String? _errorMessage;
+  String _sentToEmail = '';
 
   @override
   void initState() {
@@ -453,34 +444,131 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final email = _emailController.text.trim();
-    Navigator.of(context).pop(email.isEmpty ? null : email);
+    if (email.isEmpty) {
+      setState(() => _errorMessage = 'Please enter your email.');
+      return;
+    }
+    if (!_LoginPageContentState._emailLooksValid(email)) {
+      setState(() => _errorMessage = 'Enter a valid email address.');
+      return;
+    }
+
+    setState(() {
+      _sending = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await fb_auth.FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      setState(() {
+        _sending = false;
+        _sent = true;
+        _sentToEmail = email;
+      });
+    } on fb_auth.FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _sending = false;
+        _errorMessage = e.message ?? 'Could not send reset email.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _sending = false;
+        _errorMessage = 'Something went wrong. Try again.';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_sent) {
+      return AlertDialog(
+        icon: const Icon(Icons.mark_email_read_outlined, color: Colors.green),
+        title: const Text('Check your email'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'We sent a password reset link to:',
+              style: TextStyle(color: Colors.grey[700]),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _sentToEmail,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Next steps:',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '1. Open your email inbox\n'
+              '2. Tap the reset link from Firebase\n'
+              '3. Enter a new password\n'
+              '4. Come back here and sign in',
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Did not get it? Check spam or wait a minute, then try again.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Back to login'),
+          ),
+        ],
+      );
+    }
+
     return AlertDialog(
       title: const Text('Reset Password'),
-      content: TextField(
-        controller: _emailController,
-        decoration: const InputDecoration(
-          labelText: 'Email',
-          hintText: 'Enter your account email',
-        ),
-        keyboardType: TextInputType.emailAddress,
-        autofocus: true,
-        textInputAction: TextInputAction.done,
-        onSubmitted: (_) => _submit(),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Enter the email you used to sign up. We will email you a link to reset your password.',
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _emailController,
+            enabled: !_sending,
+            decoration: InputDecoration(
+              labelText: 'Email',
+              hintText: 'Enter your account email',
+              errorText: _errorMessage,
+            ),
+            keyboardType: TextInputType.emailAddress,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            onSubmitted: _sending ? null : (_) => _submit(),
+          ),
+        ],
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _sending ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         TextButton(
-          onPressed: _submit,
-          child: const Text('Send Link'),
+          onPressed: _sending ? null : _submit,
+          child: _sending
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Send link'),
         ),
       ],
     );
