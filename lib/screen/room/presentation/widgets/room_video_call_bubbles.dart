@@ -174,10 +174,39 @@ class RoomCallRemoteBubble extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (hasRemoteVideo && renderersReady)
-              RTCVideoView(
-                renderer,
-                key: ValueKey('remote-$remoteStreamVersion'),
-                objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+              Stack(
+                fit: StackFit.expand,
+                children: [
+                  RTCVideoView(
+                    renderer,
+                    key: ValueKey('remote-$remoteStreamVersion'),
+                    objectFit:
+                        RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                  ),
+                  if (renderer.videoWidth == 0 || renderer.videoHeight == 0)
+                    ColoredBox(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(
+                              color: AppColors.secondary,
+                              strokeWidth: 2,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Loading video…',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
               )
             else if (hasRemoteStream && renderersReady)
               Center(

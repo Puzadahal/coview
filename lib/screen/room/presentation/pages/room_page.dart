@@ -66,7 +66,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   bool _renderersInitialized = false;
   bool _isCallConnecting = false;
   bool _videoBubbleVisible = false;
-  Offset _remoteBubbleOffset = const Offset(16, 16);
+  Offset _remoteBubbleOffset = const Offset(12, 12);
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _incomingCallSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _remoteNameSub;
   bool _incomingCallPrimed = false;
@@ -94,7 +94,8 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     final stream = _remoteCallStream;
     if (stream == null) return false;
     final tracks = stream.getVideoTracks();
-    return tracks.isNotEmpty && tracks.any((track) => track.enabled);
+    return tracks.isNotEmpty &&
+        tracks.any((track) => track.enabled && !(track.muted ?? false));
   }
 
   String _fallbackRemoteName(RoomState state, bool isRoomHost) {
@@ -155,9 +156,24 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
 
   void _bindRemoteRenderer({bool bumpVersion = true}) {
     if (!_renderersInitialized || _remoteCallStream == null) return;
-    _remoteRenderer.srcObject = null;
-    _remoteRenderer.srcObject = _remoteCallStream;
-    if (bumpVersion) _remoteStreamVersion++;
+    final stream = _remoteCallStream!;
+    for (final track in stream.getVideoTracks()) {
+      track.enabled = true;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !_renderersInitialized) return;
+      try {
+        _remoteRenderer.srcObject = null;
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        if (!mounted || !_renderersInitialized) return;
+        _remoteRenderer.srcObject = stream;
+        if (bumpVersion) _remoteStreamVersion++;
+        setState(() {});
+      } catch (e) {
+        debugPrint('RoomPage: bind remote renderer failed: $e');
+      }
+    });
   }
 
   @override
@@ -205,6 +221,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     try {
       await _localRenderer.initialize();
       await _remoteRenderer.initialize();
+      _remoteRenderer.onResize = () {
+        if (mounted) setState(() {});
+      };
     } catch (e) {
       _renderersInitialized = false;
       rethrow;
@@ -244,6 +263,16 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
         if (!mounted) return;
         if (callState == RoomCallConnectionState.connected) {
           _bindRemoteRenderer(bumpVersion: true);
+          Future<void>.delayed(const Duration(seconds: 1), () {
+            if (mounted && _remoteCallStream != null) {
+              _bindRemoteRenderer(bumpVersion: true);
+            }
+          });
+          Future<void>.delayed(const Duration(seconds: 3), () {
+            if (mounted && _remoteCallStream != null) {
+              _bindRemoteRenderer(bumpVersion: true);
+            }
+          });
         } else if (callState == RoomCallConnectionState.failed &&
             _notifySystemAlerts) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1698,8 +1727,8 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
         ),
             if (callBubblesActive)
               Positioned(
+                top: _remoteBubbleOffset.dy,
                 right: _remoteBubbleOffset.dx,
-                bottom: _remoteBubbleOffset.dy + 56,
                 child: GestureDetector(
                   onPanUpdate: (details) {
                     if (!mounted) return;
@@ -1707,11 +1736,11 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                       _remoteBubbleOffset = Offset(
                         (_remoteBubbleOffset.dx - details.delta.dx).clamp(
                           8,
-                          220,
+                          200,
                         ),
-                        (_remoteBubbleOffset.dy - details.delta.dy).clamp(
+                        (_remoteBubbleOffset.dy + details.delta.dy).clamp(
                           8,
-                          360,
+                          280,
                         ),
                       );
                     });

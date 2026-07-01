@@ -41,13 +41,15 @@ class RoomCallService {
   RoomCallRole? _role;
   int _callGeneration = 0;
   Timer? _trackSyncTimer;
-  bool _iceRestartAttempted = false;
+  int _iceRestartCount = 0;
+  static const _maxIceRestarts = 3;
   String? _lastProcessedHostSdp;
 
   Map<String, dynamic> get _peerConfig => {
     'iceServers': WebRtcIceConfig.iceServers,
     'sdpSemantics': 'unified-plan',
     'iceCandidatePoolSize': 10,
+    'bundlePolicy': 'max-bundle',
     'rtcpMuxPolicy': 'require',
     'iceTransportPolicy': 'all',
   };
@@ -214,7 +216,7 @@ class RoomCallService {
     _appliedCandidateDocIds.clear();
     _pendingRemoteCandidates.clear();
     _remoteDescriptionApplied = false;
-    _iceRestartAttempted = false;
+    _iceRestartCount = 0;
     _lastProcessedHostSdp = null;
 
     for (final track in _localStream?.getTracks() ?? <MediaStreamTrack>[]) {
@@ -223,11 +225,14 @@ class RoomCallService {
     await _localStream?.dispose();
     _localStream = null;
 
-    for (final track in _remoteStream?.getTracks() ?? <MediaStreamTrack>[]) {
-      await track.stop();
+    if (_remoteStream != null) {
+      try {
+        await _remoteStream!.dispose();
+      } catch (e) {
+        debugPrint('RoomCallService: dispose remote stream wrapper: $e');
+      }
+      _remoteStream = null;
     }
-    await _remoteStream?.dispose();
-    _remoteStream = null;
 
     if (_peerConnection != null) {
       await _peerConnection!.close();
@@ -241,7 +246,7 @@ class RoomCallService {
     };
 
     _peerConnection!.onAddStream = (MediaStream stream) {
-      unawaited(_handleRemoteStream(stream));
+      unawaited(_handleRemoteStream(stream, disposePrevious: true));
     };
 
     _peerConnection!.onConnectionState = (RTCPeerConnectionState state) {
@@ -311,9 +316,15 @@ class RoomCallService {
   }
 
   Future<void> _attemptIceRecovery() async {
-    if (_disposed || _peerConnection == null || _iceRestartAttempted) return;
-    _iceRestartAttempted = true;
-    debugPrint('RoomCallService: attempting ICE restart…');
+    if (_disposed ||
+        _peerConnection == null ||
+        _iceRestartCount >= _maxIceRestarts) {
+      return;
+    }
+    _iceRestartCount++;
+    debugPrint(
+      'RoomCallService: attempting ICE restart ($_iceRestartCount/$_maxIceRestarts)…',
+    );
 
     try {
       if (_role == RoomCallRole.host) {
@@ -374,25 +385,14 @@ class RoomCallService {
     final track = event.track;
     track.enabled = true;
 
-    MediaStream stream;
     if (event.streams.isNotEmpty) {
-      stream = event.streams.first;
-    } else {
-      _remoteStream ??= await createLocalMediaStream('remote');
-      final alreadyAdded = _remoteStream!.getTracks().any(
-        (existing) => existing.id == track.id,
-      );
-      if (!alreadyAdded) {
-        await _remoteStream!.addTrack(track);
+      final stream = event.streams.first;
+      for (final t in stream.getTracks()) {
+        t.enabled = true;
       }
-      stream = _remoteStream!;
+      await _handleRemoteStream(stream, disposePrevious: true);
     }
 
-    for (final t in stream.getTracks()) {
-      t.enabled = true;
-    }
-
-    await _handleRemoteStream(stream);
     unawaited(_syncRemoteTracksFromReceivers());
   }
 
@@ -401,39 +401,56 @@ class RoomCallService {
 
     try {
       final receivers = await _peerConnection!.getReceivers();
-      MediaStream? stream = _remoteStream;
-      var changed = false;
+      if (receivers.isEmpty) return;
+
+      final stream = await createLocalMediaStream(
+        'remote_${DateTime.now().millisecondsSinceEpoch}',
+      );
+      var trackCount = 0;
 
       for (final receiver in receivers) {
         final track = receiver.track;
         if (track == null) continue;
         track.enabled = true;
-        stream ??= await createLocalMediaStream('remote');
         if (!stream.getTracks().any((existing) => existing.id == track.id)) {
           await stream.addTrack(track);
-          changed = true;
+          trackCount++;
         }
       }
 
-      if (stream != null) {
-        for (final track in stream.getTracks()) {
-          track.enabled = true;
-        }
-        if (changed || _remoteStream == null) {
-          await _handleRemoteStream(stream);
-        }
+      if (trackCount == 0) {
+        await stream.dispose();
+        return;
       }
+
+      await _handleRemoteStream(stream, disposePrevious: true);
     } catch (e) {
       debugPrint('RoomCallService: sync receivers failed: $e');
     }
   }
 
-  Future<void> _handleRemoteStream(MediaStream? stream) async {
+  Future<void> _handleRemoteStream(
+    MediaStream? stream, {
+    bool disposePrevious = false,
+  }) async {
     if (_disposed || stream == null) return;
     for (final track in stream.getTracks()) {
       track.enabled = true;
     }
+
+    final previous = _remoteStream;
     _remoteStream = stream;
+
+    if (disposePrevious &&
+        previous != null &&
+        previous.id != stream.id) {
+      try {
+        await previous.dispose();
+      } catch (e) {
+        debugPrint('RoomCallService: dispose previous remote stream: $e');
+      }
+    }
+
     if (!_remoteStreamController.isClosed) {
       _remoteStreamController.add(stream);
     }
@@ -467,8 +484,27 @@ class RoomCallService {
       throw Exception('Could not open camera/microphone. ($e)');
     }
 
+    final pc = _peerConnection!;
     for (final track in _localStream!.getTracks()) {
-      await _peerConnection!.addTrack(track, _localStream!);
+      final kind = track.kind == 'audio'
+          ? RTCRtpMediaType.RTCRtpMediaTypeAudio
+          : RTCRtpMediaType.RTCRtpMediaTypeVideo;
+      try {
+        final transceiver = await pc.addTransceiver(
+          kind: kind,
+          init: RTCRtpTransceiverInit(
+            direction: TransceiverDirection.SendRecv,
+            streams: [_localStream!],
+          ),
+        );
+        await transceiver.sender.replaceTrack(track);
+      } catch (e) {
+        debugPrint(
+          'RoomCallService: addTransceiver failed for ${track.kind}, '
+          'falling back to addTrack: $e',
+        );
+        await pc.addTrack(track, _localStream!);
+      }
     }
   }
 
@@ -586,7 +622,6 @@ class RoomCallService {
             await _applyExistingCandidates('host');
             await _flushPendingRemoteCandidates();
             await _syncRemoteTracksFromReceivers();
-            _iceRestartAttempted = false;
           } catch (e, st) {
             debugPrint('RoomCallService: host ICE restart failed: $e\n$st');
           }
