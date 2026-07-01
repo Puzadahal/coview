@@ -3,6 +3,8 @@ import 'package:flutter_translate/flutter_translate.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../config/colors/app_colors.dart';
+import '../../../../core/widgets/app_loading_indicator.dart';
+import '../../../../core/widgets/movie_poster_image.dart';
 import '../../data/models/movie_recommendation.dart';
 import '../../data/services/tmdb_service.dart';
 
@@ -33,12 +35,7 @@ class _MovieRecommendationsSectionState
       future: _moviesFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-            height: 220,
-            child: Center(
-              child: CircularProgressIndicator(color: AppColors.secondary),
-            ),
-          );
+          return const AppLoadingIndicator(padding: EdgeInsets.symmetric(vertical: 80));
         }
 
         final movies = snapshot.data ?? [];
@@ -59,7 +56,7 @@ class _MovieRecommendationsSectionState
               return SizedBox(
                 width: _cardWidth,
                 height: _listHeight,
-                child: _MovieCard(movie: movies[index]),
+                child: _CompactMovieCard(movie: movies[index]),
               );
             },
           ),
@@ -69,10 +66,10 @@ class _MovieRecommendationsSectionState
   }
 }
 
-class _MovieCard extends StatelessWidget {
+class _CompactMovieCard extends StatelessWidget {
   final MovieRecommendation movie;
 
-  const _MovieCard({required this.movie});
+  const _CompactMovieCard({required this.movie});
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +84,7 @@ class _MovieCard extends StatelessWidget {
             Expanded(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: _PosterImage(posterUrl: movie.posterUrl),
+                child: MoviePosterImage(posterUrl: movie.posterUrl),
               ),
             ),
             const SizedBox(height: 8),
@@ -103,21 +100,7 @@ class _MovieCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppColors.secondary.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                movie.languageLabel,
-                style: const TextStyle(
-                  color: AppColors.secondary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
+            _LanguageBadge(label: movie.languageLabel),
           ],
         ),
       ),
@@ -125,46 +108,26 @@ class _MovieCard extends StatelessWidget {
   }
 }
 
-class _PosterImage extends StatelessWidget {
-  final String? posterUrl;
+class _LanguageBadge extends StatelessWidget {
+  final String label;
 
-  const _PosterImage({this.posterUrl});
+  const _LanguageBadge({required this.label});
 
   @override
   Widget build(BuildContext context) {
-    if (posterUrl == null || posterUrl!.contains('placeholder')) {
-      return _posterPlaceholder();
-    }
-
-    return Image.network(
-      posterUrl!,
-      fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => _posterPlaceholder(),
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return _posterPlaceholder(showLoader: true);
-      },
-    );
-  }
-
-  Widget _posterPlaceholder({bool showLoader = false}) {
     return Container(
-      color: const Color(0xFF2E336F),
-      child: Center(
-        child: showLoader
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppColors.secondary,
-                ),
-              )
-            : Icon(
-                Icons.movie_outlined,
-                size: 40,
-                color: Colors.white.withValues(alpha: 0.5),
-              ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.secondary.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: AppColors.secondary,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

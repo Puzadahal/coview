@@ -4,6 +4,8 @@ import 'package:flutter_translate/flutter_translate.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:go_router/go_router.dart';
 import '../../../../config/colors/app_colors.dart';
+import '../../../../core/widgets/app_gradient_body.dart';
+import '../../../../core/widgets/user_avatar.dart';
 import '../../domain/bloc/home_bloc.dart';
 import '../../domain/bloc/home_event.dart';
 import '../../domain/bloc/home_state.dart';
@@ -29,7 +31,7 @@ class _HomeScreenContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final isDesktop = width >= 900;
-    final useCompactNav = width < 820;
+    final useCompactNav = width < 1000;
     final langCode = LocalizedApp.of(
       context,
     ).delegate.currentLocale.languageCode;
@@ -58,23 +60,32 @@ class _HomeScreenContent extends StatelessWidget {
                     'SyncView',
                     style: TextStyle(fontWeight: FontWeight.w800),
                   ),
-                  const SizedBox(width: 16),
-                  _NavLink(
-                    label: translate('home'),
-                    onTap: () => context.go('/home'),
-                  ),
-                  _NavLink(
-                    label: translate('about'),
-                    onTap: () => context.go('/about'),
-                  ),
-                  _LanguageMenu(
-                    label: translate('language'),
-                    current: langCode,
-                    onChanged: (value) => changeLocale(context, value),
-                  ),
-                  _NavLink(
-                    label: translate('recommendations'),
-                    onTap: () => context.go('/recommendations'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _NavLink(
+                            label: translate('home'),
+                            onTap: () => context.go('/home'),
+                          ),
+                          _NavLink(
+                            label: translate('about'),
+                            onTap: () => context.go('/about'),
+                          ),
+                          _LanguageMenu(
+                            label: translate('language'),
+                            current: langCode,
+                            onChanged: (value) => changeLocale(context, value),
+                          ),
+                          _NavLink(
+                            label: translate('recommendations'),
+                            onTap: () => context.go('/recommendations'),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -85,14 +96,7 @@ class _HomeScreenContent extends StatelessWidget {
       ),
       body: BlocBuilder<HomeBloc, HomeState>(
         builder: (context, state) {
-          return Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [AppColors.primaryDark, Color(0xFF14183A)],
-              ),
-            ),
+          return AppGradientBody(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Center(
@@ -237,7 +241,7 @@ class _HomeDrawer extends StatelessWidget {
                 stream: fb.FirebaseAuth.instance.userChanges(),
                 initialData: fb.FirebaseAuth.instance.currentUser,
                 builder: (context, snapshot) {
-                  return _UserAvatar(
+                  return UserAvatar(
                     photoUrl: snapshot.data?.photoURL,
                     radius: 12,
                     backgroundColor: Colors.white24,
@@ -271,7 +275,7 @@ class _HomeProfileButton extends StatelessWidget {
       builder: (context, snapshot) {
         return IconButton(
           tooltip: translate('profile'),
-          icon: _UserAvatar(
+          icon: UserAvatar(
             photoUrl: snapshot.data?.photoURL,
             radius: 14,
             backgroundColor: Colors.white24,
@@ -280,37 +284,6 @@ class _HomeProfileButton extends StatelessWidget {
           onPressed: onPressed,
         );
       },
-    );
-  }
-}
-
-class _UserAvatar extends StatelessWidget {
-  final String? photoUrl;
-  final double radius;
-  final Color backgroundColor;
-  final double iconSize;
-
-  const _UserAvatar({
-    required this.photoUrl,
-    required this.radius,
-    required this.backgroundColor,
-    required this.iconSize,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final trimmedPhotoUrl = photoUrl?.trim();
-
-    return CircleAvatar(
-      radius: radius,
-      backgroundColor: backgroundColor,
-      foregroundImage: trimmedPhotoUrl == null || trimmedPhotoUrl.isEmpty
-          ? null
-          : NetworkImage(trimmedPhotoUrl),
-      onForegroundImageError: trimmedPhotoUrl == null || trimmedPhotoUrl.isEmpty
-          ? null
-          : (_, _) {},
-      child: Icon(Icons.person, size: iconSize, color: AppColors.textWhite),
     );
   }
 }
@@ -331,6 +304,8 @@ class _NavLink extends StatelessWidget {
       ),
       child: Text(
         label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(color: Colors.white.withValues(alpha: 0.85)),
       ),
     );
@@ -358,10 +333,15 @@ class _LanguageMenu extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              '$label: ${langs[current] ?? langs['en']}',
-              style: const TextStyle(color: Colors.white),
+            Flexible(
+              child: Text(
+                '$label: ${langs[current] ?? langs['en']}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white),
+              ),
             ),
             const Icon(Icons.arrow_drop_down, color: Colors.white),
           ],

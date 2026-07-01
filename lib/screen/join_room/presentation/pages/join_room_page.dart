@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import '../../../../config/colors/app_colors.dart';
+import '../../../../core/widgets/app_back_app_bar.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/widgets/custom_button.dart';
 import '../../domain/bloc/join_room_bloc.dart';
 import '../../domain/bloc/join_room_event.dart';
 import '../../domain/bloc/join_room_state.dart';
@@ -38,20 +40,9 @@ class _JoinRoomPageState extends State<JoinRoomPage> {
       backgroundColor: isDark
           ? AppColors.primaryDark
           : AppColors.lightBackground,
-      appBar: AppBar(
-        title: const Text('Join Existing Room'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              context.pop();
-            } else {
-              context.go('/home');
-            }
-          },
-        ),
+      appBar: const AppBackAppBar(
+        title: 'Join Existing Room',
+        transparent: true,
       ),
       body: BlocListener<JoinRoomBloc, JoinRoomState>(
         listenWhen: (previous, current) =>
@@ -141,16 +132,11 @@ class _JoinRoomPageState extends State<JoinRoomPage> {
                         onSubmitted: (_) => _submit(),
                       ),
                       const SizedBox(height: AppConstants.spacingLarge),
-                      SizedBox(
-                        height: AppConstants.buttonHeightLarge,
-                        child: ElevatedButton.icon(
-                          onPressed: state.canSubmit ? _submit : null,
-                          icon: const Icon(Icons.meeting_room_outlined),
-                          label: const Text(
-                            'Join Room',
-                            style: TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
+                      CustomButton(
+                        text: 'Join Room',
+                        isLoading: false,
+                        onPressed: state.canSubmit ? _submit : null,
+                        backgroundColor: theme.colorScheme.primary,
                       ),
                     ],
                   );

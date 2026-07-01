@@ -11,6 +11,8 @@ import '../../../../core/widgets/theme_toggle_button.dart';
 import '../../../../core/theme/domain/bloc/theme_bloc.dart';
 import '../../../../core/theme/domain/bloc/theme_state.dart';
 import '../../../../core/theme/domain/bloc/theme_event.dart';
+import '../../../../core/widgets/app_back_app_bar.dart';
+import '../../../../core/widgets/user_avatar.dart';
 import '../../../../core/constants/app_constants.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -62,21 +64,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Profile'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              context.pop();
-            } else {
-              context.go('/home');
-            }
-          },
-        ),
-      ),
+      appBar: const AppBackAppBar(title: 'Profile', transparent: true),
       body: StreamBuilder<fb.User?>(
         stream: fb.FirebaseAuth.instance.userChanges(),
         initialData: fb.FirebaseAuth.instance.currentUser,
@@ -96,7 +84,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 Center(
                   child: Column(
                     children: [
-                      _UserAvatar(
+                      UserAvatar(
                         photoUrl: currentUser?.photoURL,
                         radius: 60,
                         backgroundColor: theme.colorScheme.primary,
@@ -530,37 +518,6 @@ class _ProfilePageState extends State<ProfilePage> {
           );
         },
       ),
-    );
-  }
-}
-
-class _UserAvatar extends StatelessWidget {
-  final String? photoUrl;
-  final double radius;
-  final Color backgroundColor;
-  final double iconSize;
-
-  const _UserAvatar({
-    required this.photoUrl,
-    required this.radius,
-    required this.backgroundColor,
-    required this.iconSize,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final trimmedPhotoUrl = photoUrl?.trim();
-
-    return CircleAvatar(
-      radius: radius,
-      backgroundColor: backgroundColor,
-      foregroundImage: trimmedPhotoUrl == null || trimmedPhotoUrl.isEmpty
-          ? null
-          : NetworkImage(trimmedPhotoUrl),
-      onForegroundImageError: trimmedPhotoUrl == null || trimmedPhotoUrl.isEmpty
-          ? null
-          : (_, _) {},
-      child: Icon(Icons.person, size: iconSize, color: AppColors.textWhite),
     );
   }
 }

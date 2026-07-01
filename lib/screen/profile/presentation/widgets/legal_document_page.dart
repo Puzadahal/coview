@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-
+import '../../../../core/widgets/app_back_app_bar.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 
@@ -30,20 +29,10 @@ class LegalDocumentPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text(title),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              context.pop();
-            } else {
-              context.go('/profile');
-            }
-          },
-        ),
+      appBar: AppBackAppBar(
+        title: title,
+        fallbackRoute: '/profile',
+        transparent: true,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppConstants.spacingLarge),

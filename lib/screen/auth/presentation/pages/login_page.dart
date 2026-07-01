@@ -13,6 +13,7 @@ import '../../../../core/widgets/glass_form_card.dart';
 import '../../../../core/widgets/custom_button.dart';
 import '../../../../core/widgets/fade_in_up.dart';
 import '../../../../config/colors/app_colors.dart';
+import '../../../../core/widgets/app_snack_bar.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../widgets/email_field_with_validation.dart';
 import '../widgets/password_text_field.dart';
@@ -88,56 +89,30 @@ class _LoginPageContentState extends State<_LoginPageContent> {
   }
 
   Future<void> _showForgotPasswordDialog() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+
     final loginEmail = context.read<LoginBloc>().state.email.trim();
     final initial = _emailController.text.trim().isNotEmpty
         ? _emailController.text.trim()
         : loginEmail;
-    final emailField = TextEditingController(text: initial);
-    final sent = await showDialog<bool>(
+
+    final email = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reset Password'),
-        content: TextField(
-          controller: emailField,
-          decoration: const InputDecoration(
-            labelText: 'Email',
-            hintText: 'Enter your account email',
-          ),
-          keyboardType: TextInputType.emailAddress,
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Send Link'),
-          ),
-        ],
-      ),
+      builder: (ctx) => _ForgotPasswordDialog(initialEmail: initial),
     );
-    final email = emailField.text.trim();
-    emailField.dispose();
-    if (sent != true || !mounted) return;
+
+    if (email == null || !mounted) return;
     if (!_emailLooksValid(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid email address.')),
-      );
+      AppSnackBar.error(context, 'Enter a valid email address.');
       return;
     }
     try {
       await fb_auth.FirebaseAuth.instance.sendPasswordResetEmail(email: email);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Password reset sent to $email')));
+      AppSnackBar.success(context, 'Password reset sent to $email');
     } on fb_auth.FirebaseAuthException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'Could not send reset email')),
-      );
+      AppSnackBar.error(context, e.message ?? 'Could not send reset email');
     }
   }
 
@@ -178,37 +153,24 @@ class _LoginPageContentState extends State<_LoginPageContent> {
               child: BlocListener<LoginBloc, LoginState>(
                 listener: (context, state) {
                   if (state.status == LoginStatus.success) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Login successful!'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
+                    AppSnackBar.success(context, 'Login successful!');
                     context.go('/home');
                   } else if (state.status == LoginStatus.guestSuccess) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Row(
-                          children: [
-                            const Icon(
-                              Icons.person_outline,
-                              color: AppColors.textWhite,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text('Joined as guest'),
-                          ],
-                        ),
-                        backgroundColor: AppColors.secondary,
-                        duration: const Duration(seconds: 2),
+                    AppSnackBar.show(
+                      context,
+                      'Joined as guest',
+                      type: AppSnackBarType.info,
+                      duration: const Duration(seconds: 2),
+                      icon: const Icon(
+                        Icons.person_outline,
+                        color: AppColors.textWhite,
                       ),
                     );
                     context.go('/home');
                   } else if (state.status == LoginStatus.failure) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(state.errorMessage ?? 'Login failed'),
-                        backgroundColor: Colors.red,
-                      ),
+                    AppSnackBar.error(
+                      context,
+                      state.errorMessage ?? 'Login failed',
                     );
                   }
                 },
@@ -463,6 +425,64 @@ class _LoginPageContentState extends State<_LoginPageContent> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ForgotPasswordDialog extends StatefulWidget {
+  final String initialEmail;
+
+  const _ForgotPasswordDialog({required this.initialEmail});
+
+  @override
+  State<_ForgotPasswordDialog> createState() => _ForgotPasswordDialogState();
+}
+
+class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
+  late final TextEditingController _emailController;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final email = _emailController.text.trim();
+    Navigator.of(context).pop(email.isEmpty ? null : email);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Reset Password'),
+      content: TextField(
+        controller: _emailController,
+        decoration: const InputDecoration(
+          labelText: 'Email',
+          hintText: 'Enter your account email',
+        ),
+        keyboardType: TextInputType.emailAddress,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _submit,
+          child: const Text('Send Link'),
+        ),
+      ],
     );
   }
 }

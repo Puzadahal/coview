@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_translate/flutter_translate.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../config/colors/app_colors.dart';
+import '../../../../core/widgets/app_back_app_bar.dart';
+import '../../../../core/widgets/app_gradient_body.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
@@ -10,23 +11,12 @@ class AboutPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.primaryDark,
-      appBar: AppBar(
+      appBar: AppBackAppBar(
+        title: translate('aboutPageTitle'),
         backgroundColor: AppColors.primaryDark,
         foregroundColor: Colors.white,
-        title: Text(translate('aboutPageTitle')),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/home'),
-        ),
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [AppColors.primaryDark, Color(0xFF14183A)],
-          ),
-        ),
+      body: AppGradientBody(
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 900),

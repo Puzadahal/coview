@@ -9,6 +9,7 @@ import '../../../../core/widgets/glass_form_card.dart';
 import '../../../../core/widgets/custom_button.dart';
 import '../../../../core/widgets/custom_text_field.dart';
 import '../../../../core/widgets/fade_in_up.dart';
+import '../../../../core/widgets/app_snack_bar.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../widgets/email_field_with_validation.dart';
@@ -121,39 +122,20 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                 listenWhen: (previous, current) =>
                     previous.status != current.status,
                 listener: (context, state) {
-                  debugPrint('[SignupPage] Status changed: ${state.status}');
                   if (state.status == SignupStatus.success) {
-                    debugPrint('[SignupPage] Success! Navigating to login...');
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Signup successful! Please login to continue.',
-                        ),
-                        backgroundColor: Colors.green,
-                        duration: Duration(seconds: 2),
-                      ),
+                    AppSnackBar.success(
+                      context,
+                      'Signup successful! Please login to continue.',
                     );
                     Future.delayed(const Duration(milliseconds: 500), () {
                       if (context.mounted) {
-                        debugPrint(
-                          '[SignupPage] Executing navigation to /login',
-                        );
                         context.go('/login');
-                      } else {
-                        debugPrint(
-                          '[SignupPage] Context not mounted, cannot navigate',
-                        );
                       }
                     });
                   } else if (state.status == SignupStatus.failure) {
-                    debugPrint(
-                      '[SignupPage] Signup failed: ${state.errorMessage}',
-                    );
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(state.errorMessage ?? 'Signup failed'),
-                        backgroundColor: Colors.red,
-                      ),
+                    AppSnackBar.error(
+                      context,
+                      state.errorMessage ?? 'Signup failed',
                     );
                   }
                 },
@@ -339,50 +321,65 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                                   ),
                                   child: Padding(
                                     padding: const EdgeInsets.only(bottom: 6),
-                                    child: CheckboxListTile(
-                                      value: state.agreedToTerms,
-                                      onChanged: (v) {
-                                        context.read<SignupBloc>().add(
-                                          SignupAgreedToTermsChanged(
-                                            v ?? false,
-                                          ),
-                                        );
-                                      },
-                                      title: Text.rich(
-                                        TextSpan(
-                                          style: TextStyle(
-                                            fontSize: 13,
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Checkbox(
+                                          value: state.agreedToTerms,
+                                          onChanged: (v) {
+                                            context.read<SignupBloc>().add(
+                                              SignupAgreedToTermsChanged(
+                                                v ?? false,
+                                              ),
+                                            );
+                                          },
+                                          activeColor: AppColors.primaryDark,
+                                          checkColor: AppColors.textWhite,
+                                          side: BorderSide(
                                             color: AppColors.textWhite
-                                                .withValues(alpha: 0.95),
+                                                .withValues(alpha: 0.8),
+                                            width: 2,
                                           ),
-                                          children: [
-                                            const TextSpan(
-                                              text: 'I agree to the ',
-                                            ),
-                                            TextSpan(
-                                              text: 'Terms of Service',
-                                              style: TextStyle(
-                                                color: AppColors.info,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                            const TextSpan(text: ' and '),
-                                            TextSpan(
-                                              text: 'Privacy Policy',
-                                              style: TextStyle(
-                                                color: AppColors.info,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
                                         ),
-                                      ),
-                                      controlAffinity:
-                                          ListTileControlAffinity.leading,
-                                      contentPadding: EdgeInsets.zero,
-                                      dense: true,
-                                      activeColor: AppColors.primaryDark,
-                                      tileColor: Colors.transparent,
+                                        Expanded(
+                                          child: Padding(
+                                            padding:
+                                                const EdgeInsets.only(top: 12),
+                                            child: Text.rich(
+                                              TextSpan(
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: AppColors.textWhite
+                                                      .withValues(alpha: 0.95),
+                                                ),
+                                                children: [
+                                                  const TextSpan(
+                                                    text: 'I agree to the ',
+                                                  ),
+                                                  TextSpan(
+                                                    text: 'Terms of Service',
+                                                    style: TextStyle(
+                                                      color: AppColors.info,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                  const TextSpan(text: ' and '),
+                                                  TextSpan(
+                                                    text: 'Privacy Policy',
+                                                    style: TextStyle(
+                                                      color: AppColors.info,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 );

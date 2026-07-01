@@ -4,8 +4,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:flutter/foundation.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../config/colors/app_colors.dart';
+import '../../../../core/widgets/app_snack_bar.dart';
+import '../../../../core/widgets/app_back_app_bar.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/storage/storage_upload_service.dart';
 import '../../../../core/widgets/glass_form_card.dart';
@@ -37,21 +38,7 @@ class _CreateRoomPageContent extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Create Room'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              context.pop();
-            } else {
-              context.go('/home');
-            }
-          },
-        ),
-      ),
+      appBar: const AppBackAppBar(title: 'Create Room', transparent: true),
       body: BlocListener<CreateRoomBloc, CreateRoomState>(
         listenWhen: (previous, current) => previous.status != current.status,
         listener: (context, state) {
@@ -66,11 +53,9 @@ class _CreateRoomPageContent extends StatelessWidget {
               ),
             );
           } else if (state.status == CreateRoomStatus.failure) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.errorMessage ?? 'Failed to create room'),
-                backgroundColor: AppColors.error,
-              ),
+            AppSnackBar.error(
+              context,
+              state.errorMessage ?? 'Failed to create room',
             );
           }
         },

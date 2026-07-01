@@ -3,6 +3,11 @@ import 'package:flutter_translate/flutter_translate.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../config/colors/app_colors.dart';
+import '../../../../core/widgets/app_back_app_bar.dart';
+import '../../../../core/widgets/app_gradient_body.dart';
+import '../../../../core/widgets/app_loading_indicator.dart';
+import '../../../../core/widgets/custom_button.dart';
+import '../../../../core/widgets/movie_poster_image.dart';
 import '../../data/models/movie_recommendation.dart';
 import '../../data/services/tmdb_service.dart';
 
@@ -26,23 +31,12 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.primaryDark,
-      appBar: AppBar(
+      appBar: AppBackAppBar(
+        title: translate('recommendationsPageTitle'),
         backgroundColor: AppColors.primaryDark,
         foregroundColor: Colors.white,
-        title: Text(translate('recommendationsPageTitle')),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/home'),
-        ),
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [AppColors.primaryDark, Color(0xFF14183A)],
-          ),
-        ),
+      body: AppGradientBody(
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 980),
@@ -78,14 +72,7 @@ class _RecommendationsPageState extends State<RecommendationsPage> {
                       builder: (context, snapshot) {
                         if (snapshot.connectionState ==
                             ConnectionState.waiting) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 48),
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                color: AppColors.secondary,
-                              ),
-                            ),
-                          );
+                          return const AppLoadingIndicator();
                         }
 
                         final movies = snapshot.data ?? [];
@@ -153,7 +140,10 @@ class _RecommendationCard extends StatelessWidget {
             child: SizedBox(
               height: 140,
               width: double.infinity,
-              child: _PosterImage(posterUrl: movie.posterUrl),
+              child: MoviePosterImage(
+                posterUrl: movie.posterUrl,
+                useGradientPlaceholder: true,
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -194,64 +184,15 @@ class _RecommendationCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          ElevatedButton(
+          CustomButton(
+            text: translate('watchWithFriends'),
+            height: 44,
+            fontSize: 14,
             onPressed: () => context.go('/create-room'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.secondary,
-              foregroundColor: AppColors.textDark,
-            ),
-            child: Text(translate('watchWithFriends')),
+            backgroundColor: AppColors.secondary,
+            foregroundColor: AppColors.textDark,
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PosterImage extends StatelessWidget {
-  final String? posterUrl;
-
-  const _PosterImage({this.posterUrl});
-
-  @override
-  Widget build(BuildContext context) {
-    if (posterUrl == null || posterUrl!.contains('placeholder')) {
-      return _posterPlaceholder();
-    }
-
-    return Image.network(
-      posterUrl!,
-      fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => _posterPlaceholder(),
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return _posterPlaceholder(showLoader: true);
-      },
-    );
-  }
-
-  Widget _posterPlaceholder({bool showLoader = false}) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF6C5CE7), Color(0xFF00D9FF)],
-        ),
-      ),
-      child: Center(
-        child: showLoader
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : const Icon(
-                Icons.play_circle_fill_rounded,
-                size: 54,
-                color: Colors.white,
-              ),
       ),
     );
   }
