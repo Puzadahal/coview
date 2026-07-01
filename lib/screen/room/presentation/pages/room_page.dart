@@ -11,6 +11,7 @@ import 'package:video_player/video_player.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
+import '../../../../core/widgets/app_snack_bar.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/moderation/chat_moderation.dart';
@@ -73,6 +74,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   int _lastSeenCallGeneration = 0;
   String _remoteParticipantName = 'Guest';
   int _remoteStreamVersion = 0;
+  Timer? _callConnectWatchdog;
   int _lastPlaybackVersionApplied = -1;
   //Avoid back-to-back YouTube drift seeks; each seek shows buffering/loading.
   DateTime? _lastYoutubeDriftSeekWallClock;
@@ -154,6 +156,31 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     _listenForRemoteParticipantName(isRoomHost);
   }
 
+  void _dismissCallSnackBars() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+  }
+
+  void _startCallConnectWatchdog() {
+    _callConnectWatchdog?.cancel();
+    _callConnectWatchdog = Timer(const Duration(seconds: 25), () {
+      if (!mounted) return;
+      if (_callConnectionState != RoomCallConnectionState.connecting) return;
+      setState(() => _callConnectionState = RoomCallConnectionState.failed);
+      AppSnackBar.error(
+        context,
+        'Call timed out. On different networks, both phones need internet '
+        'and may take longer to connect.',
+      );
+    });
+  }
+
+  void _cancelCallConnectWatchdog() {
+    _callConnectWatchdog?.cancel();
+    _callConnectWatchdog = null;
+  }
+
   void _bindRemoteRenderer({bool bumpVersion = true}) {
     if (!_renderersInitialized || _remoteCallStream == null) return;
     final stream = _remoteCallStream!;
@@ -182,6 +209,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     NtpClock.instance.refresh();
     unawaited(_loadNotificationPrefs());
+    unawaited(_initializeCallRenderers());
     _driftTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       unawaited(_correctDriftOnce());
     });
@@ -201,6 +229,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _cancelCallConnectWatchdog();
     _driftTimer?.cancel();
     _playbackSpeedResetTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
@@ -235,6 +264,11 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   Future<void> _startOrJoinCall(RoomState state) async {
     if (_isCallConnecting) return;
     _isCallConnecting = true;
+    _dismissCallSnackBars();
+    if (mounted) {
+      setState(() => _callConnectionState = RoomCallConnectionState.connecting);
+    }
+    _startCallConnectWatchdog();
     try {
       await _initializeCallRenderers();
 
@@ -262,6 +296,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
           _callService!.connectionStateUpdates.listen((callState) {
         if (!mounted) return;
         if (callState == RoomCallConnectionState.connected) {
+          _cancelCallConnectWatchdog();
           _bindRemoteRenderer(bumpVersion: true);
           Future<void>.delayed(const Duration(seconds: 1), () {
             if (mounted && _remoteCallStream != null) {
@@ -275,14 +310,11 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
           });
         } else if (callState == RoomCallConnectionState.failed &&
             _notifySystemAlerts) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Video call connection failed. End the call and try again. '
-                'Use two real phones on the same Wi‑Fi for best results.',
-              ),
-              duration: Duration(seconds: 6),
-            ),
+          _cancelCallConnectWatchdog();
+          AppSnackBar.error(
+            context,
+            'Video call failed to connect. On different Wi‑Fi/mobile networks '
+            'both phones need internet — end call and try again.',
           );
         }
         setState(() => _callConnectionState = callState);
@@ -301,6 +333,15 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
           hostName: hostName,
           roomName: state.roomName,
         );
+        if (mounted) {
+          setState(() {
+            _localCallStream = _callService!.localStream;
+            if (_renderersInitialized) {
+              _localRenderer.srcObject = _localCallStream;
+            }
+            _videoBubbleVisible = true;
+          });
+        }
       } else {
         _primeRemoteParticipantName(state, false);
         final ready = await _callService!.waitForHostOffer();
@@ -330,6 +371,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       });
     } catch (e, st) {
       debugPrint('RoomPage: video call failed: $e\n$st');
+      _cancelCallConnectWatchdog();
       await _remoteStreamSub?.cancel();
       await _callConnectionSub?.cancel();
       _remoteStreamSub = null;
@@ -355,6 +397,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
   }
 
   Future<void> _endVideoCall() async {
+    _dismissCallSnackBars();
+    _cancelCallConnectWatchdog();
+    await _callService?.clearCallInvite();
     await _remoteStreamSub?.cancel();
     await _callConnectionSub?.cancel();
     _remoteStreamSub = null;
@@ -407,7 +452,10 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       }
 
       if (!active || generation <= _lastSeenCallGeneration) {
-        if (!active) _lastSeenCallGeneration = 0;
+        if (!active) {
+          _lastSeenCallGeneration = 0;
+          _dismissCallSnackBars();
+        }
         return;
       }
       if (_localCallStream != null || _isCallConnecting) return;
@@ -424,11 +472,14 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        duration: const Duration(seconds: 12),
+        duration: const Duration(seconds: 30),
         content: Text('$hostName started a video call. Join now?'),
         action: SnackBarAction(
           label: 'Join',
-          onPressed: () => unawaited(_toggleCallBubble(state)),
+          onPressed: () {
+            _dismissCallSnackBars();
+            unawaited(_toggleCallBubble(state));
+          },
         ),
       ),
     );
@@ -459,18 +510,15 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     }
     try {
       if (_localCallStream == null) {
+        _dismissCallSnackBars();
         await _startOrJoinCall(state);
         if (!mounted) return;
         final uid = fb.FirebaseAuth.instance.currentUser?.uid;
         final isRoomHost = uid != null && uid == state.hostId;
         if (isRoomHost && _notifySystemAlerts) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Video call started. Ask your friend to open this room and tap the camera icon.',
-              ),
-              duration: Duration(seconds: 4),
-            ),
+          AppSnackBar.info(
+            context,
+            'Call started. Friend should tap Join on the banner or camera icon.',
           );
         }
       } else {
@@ -1523,17 +1571,27 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                     ),
                     const SizedBox(width: 12),
                     IconButton(
-                      tooltip: _localCallStream != null
-                          ? (_videoBubbleVisible
-                              ? 'Hide call bubbles'
-                              : 'Show call bubbles')
-                          : 'Start video call',
-                      onPressed: () => unawaited(_toggleCallBubble(state)),
-                      icon: Icon(
-                        _videoBubbleVisible
-                            ? Icons.videocam
-                            : Icons.videocam_outlined,
-                      ),
+                      tooltip: _isCallConnecting
+                          ? 'Connecting call…'
+                          : (_localCallStream != null
+                              ? (_videoBubbleVisible
+                                  ? 'Hide call bubbles'
+                                  : 'Show call bubbles')
+                              : 'Start video call'),
+                      onPressed: _isCallConnecting
+                          ? null
+                          : () => unawaited(_toggleCallBubble(state)),
+                      icon: _isCallConnecting
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(
+                              _videoBubbleVisible
+                                  ? Icons.videocam
+                                  : Icons.videocam_outlined,
+                            ),
                     ),
                   ],
                 ),

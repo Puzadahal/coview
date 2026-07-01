@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
@@ -119,7 +121,7 @@ class RoomCallLocalStrip extends StatelessWidget {
 }
 
 /// Draggable remote participant bubble over the chat pane.
-class RoomCallRemoteBubble extends StatelessWidget {
+class RoomCallRemoteBubble extends StatefulWidget {
   final RTCVideoRenderer renderer;
   final bool renderersReady;
   final bool hasRemoteStream;
@@ -143,21 +145,74 @@ class RoomCallRemoteBubble extends StatelessWidget {
     required this.onClose,
   });
 
+  @override
+  State<RoomCallRemoteBubble> createState() => _RoomCallRemoteBubbleState();
+}
+
+class _RoomCallRemoteBubbleState extends State<RoomCallRemoteBubble> {
+  Timer? _loadingTimer;
+  bool _loadingTimedOut = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _armLoadingTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant RoomCallRemoteBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.connectionState == RoomCallConnectionState.connected &&
+        widget.hasRemoteVideo &&
+        widget.renderer.videoWidth > 0) {
+      _loadingTimedOut = false;
+      _loadingTimer?.cancel();
+    } else if (widget.remoteStreamVersion != oldWidget.remoteStreamVersion ||
+        widget.connectionState != oldWidget.connectionState) {
+      _loadingTimedOut = false;
+      _armLoadingTimer();
+    }
+  }
+
+  void _armLoadingTimer() {
+    _loadingTimer?.cancel();
+    _loadingTimer = Timer(const Duration(seconds: 20), () {
+      if (!mounted) return;
+      if (widget.renderer.videoWidth > 0 && widget.hasRemoteVideo) return;
+      setState(() => _loadingTimedOut = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _loadingTimer?.cancel();
+    super.dispose();
+  }
+
   String get _statusLabel {
-    if (hasRemoteVideo && renderersReady) return remoteParticipantName;
-    if (hasRemoteStream && renderersReady) return remoteParticipantName;
-    return switch (connectionState) {
-      RoomCallConnectionState.connecting when isRoomHost => 'Waiting…',
+    if (_loadingTimedOut) return 'Connection slow';
+    if (widget.hasRemoteVideo && widget.renderersReady) {
+      return widget.remoteParticipantName;
+    }
+    if (widget.hasRemoteStream && widget.renderersReady) {
+      return widget.remoteParticipantName;
+    }
+    return switch (widget.connectionState) {
+      RoomCallConnectionState.connecting when widget.isRoomHost => 'Waiting…',
       RoomCallConnectionState.connecting => 'Joining…',
       RoomCallConnectionState.failed => 'Failed',
       RoomCallConnectionState.connected => 'Connected',
-      _ when isRoomHost => 'Waiting…',
+      _ when widget.isRoomHost => 'Waiting…',
       _ => 'Connecting…',
     };
   }
 
   @override
   Widget build(BuildContext context) {
+    final showVideo = widget.hasRemoteVideo && widget.renderersReady;
+    final videoReady =
+        widget.renderer.videoWidth > 0 && widget.renderer.videoHeight > 0;
+
     return Material(
       elevation: 8,
       borderRadius: BorderRadius.circular(14),
@@ -173,17 +228,17 @@ class RoomCallRemoteBubble extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (hasRemoteVideo && renderersReady)
+            if (showVideo)
               Stack(
                 fit: StackFit.expand,
                 children: [
                   RTCVideoView(
-                    renderer,
-                    key: ValueKey('remote-$remoteStreamVersion'),
+                    widget.renderer,
+                    key: ValueKey('remote-${widget.remoteStreamVersion}'),
                     objectFit:
                         RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
                   ),
-                  if (renderer.videoWidth == 0 || renderer.videoHeight == 0)
+                  if (!videoReady && !_loadingTimedOut)
                     ColoredBox(
                       color: Colors.black.withValues(alpha: 0.55),
                       child: Center(
@@ -196,7 +251,7 @@ class RoomCallRemoteBubble extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Loading video…',
+                              'Connecting…',
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.8),
                                 fontSize: 10,
@@ -206,14 +261,30 @@ class RoomCallRemoteBubble extends StatelessWidget {
                         ),
                       ),
                     ),
+                  if (_loadingTimedOut && !videoReady)
+                    Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Center(
+                        child: Text(
+                          'Still connecting.\nDifferent networks can be slow — '
+                          'keep both apps open.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.78),
+                            fontSize: 9,
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               )
-            else if (hasRemoteStream && renderersReady)
+            else if (widget.hasRemoteStream && widget.renderersReady)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Text(
-                    '$remoteParticipantName\n(camera off or loading)',
+                    '${widget.remoteParticipantName}\n(camera off)',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.75),
@@ -229,7 +300,8 @@ class RoomCallRemoteBubble extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (connectionState == RoomCallConnectionState.connecting)
+                      if (widget.connectionState ==
+                          RoomCallConnectionState.connecting)
                         const CircularProgressIndicator(
                           color: AppColors.secondary,
                           strokeWidth: 2,
@@ -242,9 +314,9 @@ class RoomCallRemoteBubble extends StatelessWidget {
                         ),
                       const SizedBox(height: 8),
                       Text(
-                        isRoomHost
+                        widget.isRoomHost
                             ? 'Waiting for someone to join…'
-                            : 'Waiting for $remoteParticipantName…',
+                            : 'Waiting for ${widget.remoteParticipantName}…',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.75),
@@ -286,7 +358,7 @@ class RoomCallRemoteBubble extends StatelessWidget {
                       ),
                     ),
                     GestureDetector(
-                      onTap: onClose,
+                      onTap: widget.onClose,
                       child: Container(
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(

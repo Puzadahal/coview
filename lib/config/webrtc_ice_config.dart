@@ -12,10 +12,6 @@ class WebRtcIceConfig {
   /// Public STUN + free relay servers. Add custom TURN in [webrtc_ice_config.local.dart].
   static List<Map<String, dynamic>> get iceServers {
     final servers = <Map<String, dynamic>>[
-      {'urls': 'stun:stun.l.google.com:19302'},
-      {'urls': 'stun:stun1.l.google.com:19302'},
-      {'urls': 'stun:stun2.l.google.com:19302'},
-      {'urls': 'stun:stun3.l.google.com:19302'},
       {
         'urls': [
           'turn:openrelay.metered.ca:80',
@@ -36,6 +32,10 @@ class WebRtcIceConfig {
         'username': 'openrelayproject',
         'credential': 'openrelayproject',
       },
+      {'urls': 'stun:stun.l.google.com:19302'},
+      {'urls': 'stun:stun1.l.google.com:19302'},
+      {'urls': 'stun:stun2.l.google.com:19302'},
+      {'urls': 'stun:stun3.l.google.com:19302'},
     ];
 
     final extra = local.extraIceServers;

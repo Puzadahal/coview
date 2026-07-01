@@ -43,15 +43,16 @@ class RoomCallService {
   Timer? _trackSyncTimer;
   int _iceRestartCount = 0;
   static const _maxIceRestarts = 3;
+  bool _forceRelay = false;
   String? _lastProcessedHostSdp;
 
   Map<String, dynamic> get _peerConfig => {
     'iceServers': WebRtcIceConfig.iceServers,
     'sdpSemantics': 'unified-plan',
-    'iceCandidatePoolSize': 10,
+    'iceCandidatePoolSize': 4,
     'bundlePolicy': 'max-bundle',
     'rtcpMuxPolicy': 'require',
-    'iceTransportPolicy': 'all',
+    'iceTransportPolicy': _forceRelay ? 'relay' : 'all',
   };
 
   static const _offerAnswerConstraints = {
@@ -79,12 +80,17 @@ class RoomCallService {
     _emitConnectionState(RoomCallConnectionState.connecting);
 
     if (clearExisting) {
-      await _clearCallSignaling(clearAll: true);
+      final clearFuture = _clearCallSignaling(clearAll: true);
+      await _resetPeerConnection();
+      await _attachLocalMedia();
+      await CallAudioSession.activate();
+      await clearFuture;
+    } else {
+      await _resetPeerConnection();
+      await _attachLocalMedia();
+      await CallAudioSession.activate();
     }
 
-    await _resetPeerConnection();
-    await _attachLocalMedia();
-    await CallAudioSession.activate();
     _callGeneration = DateTime.now().millisecondsSinceEpoch;
     await _publishHostOffer(hostId: hostId, hostName: hostName);
     await _publishCallInvite(
@@ -97,7 +103,7 @@ class RoomCallService {
   }
 
   Future<bool> waitForHostOffer({
-    Duration timeout = const Duration(seconds: 45),
+    Duration timeout = const Duration(seconds: 20),
   }) async {
     final hostRef = _firestore
         .collection('rooms')
@@ -240,16 +246,22 @@ class RoomCallService {
     }
 
     _peerConnection = await createPeerConnection(_peerConfig);
+    _wirePeerConnectionHandlers();
+  }
 
-    _peerConnection!.onTrack = (RTCTrackEvent event) {
+  void _wirePeerConnectionHandlers() {
+    final pc = _peerConnection;
+    if (pc == null) return;
+
+    pc.onTrack = (RTCTrackEvent event) {
       unawaited(_handleRemoteTrack(event));
     };
 
-    _peerConnection!.onAddStream = (MediaStream stream) {
+    pc.onAddStream = (MediaStream stream) {
       unawaited(_handleRemoteStream(stream, disposePrevious: true));
     };
 
-    _peerConnection!.onConnectionState = (RTCPeerConnectionState state) {
+    pc.onConnectionState = (RTCPeerConnectionState state) {
       debugPrint('RoomCallService: connectionState=$state');
       switch (state) {
         case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
@@ -265,7 +277,7 @@ class RoomCallService {
       }
     };
 
-    _peerConnection!.onIceConnectionState = (RTCIceConnectionState state) {
+    pc.onIceConnectionState = (RTCIceConnectionState state) {
       debugPrint('RoomCallService: iceConnectionState=$state');
       if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
           state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
@@ -298,7 +310,7 @@ class RoomCallService {
 
     try {
       await completer.future.timeout(
-        const Duration(seconds: 12),
+        const Duration(seconds: 2),
         onTimeout: () {
           debugPrint(
             'RoomCallService: ICE gathering timed out — publishing SDP anyway',
@@ -325,6 +337,11 @@ class RoomCallService {
     debugPrint(
       'RoomCallService: attempting ICE restart ($_iceRestartCount/$_maxIceRestarts)…',
     );
+
+    if (_iceRestartCount >= 2 && !_forceRelay) {
+      await _reconnectUsingRelay();
+      return;
+    }
 
     try {
       if (_role == RoomCallRole.host) {
@@ -809,12 +826,135 @@ class RoomCallService {
         .collection('rooms')
         .doc(roomId)
         .collection('call');
-    await _deleteCandidates(callRef.doc('host'));
-    await _deleteCandidates(callRef.doc('guest'));
+    await Future.wait([
+      _deleteCandidates(callRef.doc('host')),
+      _deleteCandidates(callRef.doc('guest')),
+    ]);
     await callRef.doc('guest').delete();
     await _clearCallInvite();
     if (clearAll) {
       await callRef.doc('host').delete();
+    }
+  }
+
+  /// Clears the call invite so guests stop seeing join prompts.
+  Future<void> clearCallInvite() => _clearCallInvite();
+
+  Future<void> _reconnectUsingRelay() async {
+    if (_disposed || _forceRelay || _role == null) return;
+    _forceRelay = true;
+    debugPrint('RoomCallService: reconnecting via TURN relay (cross-network)');
+
+    final role = _role!;
+    final generation = _callGeneration;
+    final savedLocal = _localStream;
+
+    await _candidatesSub?.cancel();
+    await _answerSub?.cancel();
+    await _hostRenegotiationSub?.cancel();
+    _candidatesSub = null;
+    _answerSub = null;
+    _hostRenegotiationSub = null;
+
+    if (_remoteStream != null) {
+      try {
+        await _remoteStream!.dispose();
+      } catch (_) {}
+      _remoteStream = null;
+    }
+
+    await _peerConnection?.close();
+    _peerConnection = null;
+    _appliedCandidateDocIds.clear();
+    _pendingRemoteCandidates.clear();
+    _remoteDescriptionApplied = false;
+
+    _peerConnection = await createPeerConnection(_peerConfig);
+    _wirePeerConnectionHandlers();
+
+    if (savedLocal != null) {
+      _localStream = savedLocal;
+      for (final track in savedLocal.getTracks()) {
+        final kind = track.kind == 'audio'
+            ? RTCRtpMediaType.RTCRtpMediaTypeAudio
+            : RTCRtpMediaType.RTCRtpMediaTypeVideo;
+        try {
+          final transceiver = await _peerConnection!.addTransceiver(
+            kind: kind,
+            init: RTCRtpTransceiverInit(
+              direction: TransceiverDirection.SendRecv,
+              streams: [savedLocal],
+            ),
+          );
+          await transceiver.sender.replaceTrack(track);
+        } catch (e) {
+          try {
+            await _peerConnection!.addTrack(track, savedLocal);
+          } catch (e2) {
+            debugPrint('RoomCallService: re-add track failed: $e2');
+          }
+        }
+      }
+    } else {
+      await _attachLocalMedia();
+    }
+
+    _callGeneration = generation;
+    _role = role;
+
+    if (role == RoomCallRole.host) {
+      await _publishHostOffer();
+      await _firestore
+          .collection('rooms')
+          .doc(roomId)
+          .collection('call')
+          .doc('host')
+          .set({
+            'iceRestart': true,
+            'relayReconnect': true,
+          }, SetOptions(merge: true));
+      _remoteDescriptionApplied = false;
+      _listenForGuestAnswer();
+      _listenForGuestCandidates();
+    } else {
+      final hostDoc = await _firestore
+          .collection('rooms')
+          .doc(roomId)
+          .collection('call')
+          .doc('host')
+          .get();
+      if (!_hasValidSessionDescription(hostDoc.data())) return;
+      final hostData = hostDoc.data()!;
+      _lastProcessedHostSdp = hostData['sdp'] as String?;
+      final offer = RTCSessionDescription(
+        hostData['sdp'] as String,
+        hostData['type'] as String,
+      );
+      _peerConnection!.onIceCandidate = (c) => _publishCandidate('guest', c);
+      _listenForHostCandidates();
+      await _peerConnection!.setRemoteDescription(offer);
+      _remoteDescriptionApplied = true;
+      await _applyExistingCandidates('host');
+      final answer =
+          await _peerConnection!.createAnswer(_offerAnswerConstraints);
+      await _peerConnection!.setLocalDescription(answer);
+      final local = await _localDescriptionWithCandidates();
+      await _firestore
+          .collection('rooms')
+          .doc(roomId)
+          .collection('call')
+          .doc('guest')
+          .set({
+            'sdp': local?.sdp ?? answer.sdp,
+            'type': local?.type ?? answer.type,
+            'generation': _callGeneration,
+            'iceRestart': true,
+            'relayReconnect': true,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+      await _flushPendingRemoteCandidates();
+      await _syncRemoteTracksFromReceivers();
+      _listenForHostRenegotiation();
     }
   }
 
@@ -864,6 +1004,8 @@ class RoomCallService {
     _localStream = null;
     _remoteStream = null;
     _role = null;
+    _forceRelay = false;
+    _iceRestartCount = 0;
 
     if (!_remoteStreamController.isClosed) {
       await _remoteStreamController.close();
