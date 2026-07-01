@@ -15,7 +15,10 @@ class JoinRoomState extends Equatable {
     this.status = JoinRoomStatus.initial,
   });
 
-  bool get canSubmit => rawInput.trim().isNotEmpty;
+  bool get canSubmit =>
+      rawInput.trim().isNotEmpty && status != JoinRoomStatus.validating;
+
+  bool get isValidating => status == JoinRoomStatus.validating;
 
   JoinRoomState copyWith({
     String? rawInput,

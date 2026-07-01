@@ -209,7 +209,6 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     NtpClock.instance.refresh();
     unawaited(_loadNotificationPrefs());
-    unawaited(_initializeCallRenderers());
     _driftTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       unawaited(_correctDriftOnce());
     });
@@ -240,8 +239,11 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
     _incomingCallSub?.cancel();
     _remoteNameSub?.cancel();
     unawaited(_callService?.dispose());
-    _localRenderer.dispose();
-    _remoteRenderer.dispose();
+    if (_renderersInitialized) {
+      _localRenderer.dispose();
+      _remoteRenderer.dispose();
+      _renderersInitialized = false;
+    }
     super.dispose();
   }
 
@@ -1032,6 +1034,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
             child: BlocListener<RoomBloc, RoomState>(
               listenWhen: (p, c) =>
                   c.status != p.status ||
+                  c.videoUrl != p.videoUrl ||
                   c.actionMessage != p.actionMessage ||
                   c.roomDeleted != p.roomDeleted ||
                   c.playbackVersion != p.playbackVersion ||
@@ -1085,13 +1088,12 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                 if (cameFromLoading) {
                   _listenForIncomingCall(state);
                 }
+                unawaited(_preparePlaybackSource(state.videoUrl));
                 final force = cameFromLoading;
                 unawaited(_applyPlaybackFromFirestore(state, force: force));
               },
               child: BlocBuilder<RoomBloc, RoomState>(
                 builder: (context, state) {
-                  unawaited(_preparePlaybackSource(state.videoUrl));
-
                   if (state.status == RoomStatus.loading) {
                     return const Center(child: CircularProgressIndicator());
                   }

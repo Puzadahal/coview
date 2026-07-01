@@ -89,5 +89,14 @@
         <package android:name="com.facebook.orca" />
         <package android:name="org.telegram.messenger" />
         <package android:name="com.discord" />
+        <!-- share_plus: resolve apps for ACTION_SEND on Android 11+ -->
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="text/plain" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="*/*" />
+        </intent>
     </queries>
 </manifest>

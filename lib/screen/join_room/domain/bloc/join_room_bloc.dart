@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'join_room_event.dart';
 import 'join_room_state.dart';
@@ -12,6 +13,7 @@ class JoinRoomBloc extends Bloc<JoinRoomEvent, JoinRoomState> {
     JoinRoomInputChanged event,
     Emitter<JoinRoomState> emit,
   ) {
+    if (state.status == JoinRoomStatus.validating) return;
     emit(
       state.copyWith(
         rawInput: event.value,
@@ -21,10 +23,12 @@ class JoinRoomBloc extends Bloc<JoinRoomEvent, JoinRoomState> {
     );
   }
 
-  void _onSubmitted(
+  Future<void> _onSubmitted(
     JoinRoomSubmitted event,
     Emitter<JoinRoomState> emit,
-  ) {
+  ) async {
+    if (state.status == JoinRoomStatus.validating) return;
+
     final raw = state.rawInput.trim();
     if (raw.isEmpty) {
       emit(
@@ -63,11 +67,51 @@ class JoinRoomBloc extends Bloc<JoinRoomEvent, JoinRoomState> {
 
     emit(
       state.copyWith(
-        resolvedRoomId: roomId,
         error: null,
-        status: JoinRoomStatus.success,
+        status: JoinRoomStatus.validating,
       ),
     );
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('rooms')
+          .doc(roomId)
+          .get();
+      if (!doc.exists) {
+        emit(
+          state.copyWith(
+            error:
+                'Room not found. Check the code and make sure the host is online.',
+            status: JoinRoomStatus.failure,
+          ),
+        );
+        return;
+      }
+
+      emit(
+        state.copyWith(
+          resolvedRoomId: roomId,
+          error: null,
+          status: JoinRoomStatus.success,
+        ),
+      );
+    } on FirebaseException catch (e) {
+      emit(
+        state.copyWith(
+          error: e.code == 'permission-denied'
+              ? 'Could not verify room. Sign in and try again.'
+              : 'Network error. Check your connection and try again.',
+          status: JoinRoomStatus.failure,
+        ),
+      );
+    } catch (_) {
+      emit(
+        state.copyWith(
+          error: 'Could not verify room. Check your connection and try again.',
+          status: JoinRoomStatus.failure,
+        ),
+      );
+    }
   }
 }
 

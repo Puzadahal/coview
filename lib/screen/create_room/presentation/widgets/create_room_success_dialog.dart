@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/utils/invite_link.dart';
@@ -135,7 +136,37 @@ class CreateRoomSuccessDialog extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 16),
+
+          OutlinedButton.icon(
+            onPressed: () async {
+              final text = isRoomCodeOnly
+                  ? 'Join my Coview room "$roomName".\n\nRoom code: $resolvedLink\n\nOpen Coview → Join Room and paste this code.'
+                  : 'Join my Coview watch room "$roomName":\n$resolvedLink';
+              try {
+                await SharePlus.instance.share(
+                  ShareParams(
+                    text: text,
+                    subject: 'Join my Coview room: $roomName',
+                  ),
+                );
+              } catch (_) {
+                await Clipboard.setData(ClipboardData(text: resolvedLink));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Room code copied to clipboard.')),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.share_outlined),
+            label: const Text('Share room code'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              side: BorderSide(color: theme.colorScheme.primary, width: 2),
+            ),
+          ),
+          const SizedBox(height: 16),
 
           Row(
             children: [

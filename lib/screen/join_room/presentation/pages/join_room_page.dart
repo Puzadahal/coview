@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -48,40 +51,38 @@ class _JoinRoomPageState extends State<JoinRoomPage> {
         listenWhen: (previous, current) =>
             previous.status != current.status &&
             current.status == JoinRoomStatus.success,
-        listener: (context, state) async {
+        listener: (context, state) {
           final roomId = state.resolvedRoomId;
-          if (roomId != null && roomId.isNotEmpty) {
-            final user = fb.FirebaseAuth.instance.currentUser;
-            if (user != null) {
-              try {
-                final firestore = FirebaseFirestore.instance;
-                final roomDoc = await firestore
-                    .collection('rooms')
-                    .doc(roomId)
-                    .get();
-                final data = roomDoc.data() ?? {};
-                await firestore
-                    .collection('users')
-                    .doc(user.uid)
-                    .collection('rooms')
-                    .doc(roomId)
-                    .set({
-                      'roomId': roomId,
-                      'name': (data['name'] as String?) ?? 'Watch Room',
-                      'videoUrl': (data['videoUrl'] as String?) ?? '',
-                      'isHost': data['hostId'] == user.uid,
-                      'lastJoinedAt': FieldValue.serverTimestamp(),
-                    }, SetOptions(merge: true));
-              } catch (e, st) {
-                debugPrint(
-                  'JoinRoom: could not save user room history: $e\n$st',
-                );
-              }
-            }
+          if (roomId == null || roomId.isEmpty) return;
+          if (!mounted) return;
+          context.go('/join/$roomId');
 
-            if (!mounted) return;
-            this.context.go('/join/$roomId');
-          }
+          final user = fb.FirebaseAuth.instance.currentUser;
+          if (user == null) return;
+          unawaited(() async {
+            try {
+              final firestore = FirebaseFirestore.instance;
+              final roomDoc =
+                  await firestore.collection('rooms').doc(roomId).get();
+              final data = roomDoc.data() ?? {};
+              await firestore
+                  .collection('users')
+                  .doc(user.uid)
+                  .collection('rooms')
+                  .doc(roomId)
+                  .set({
+                'roomId': roomId,
+                'name': (data['name'] as String?) ?? 'Watch Room',
+                'videoUrl': (data['videoUrl'] as String?) ?? '',
+                'isHost': data['hostId'] == user.uid,
+                'lastJoinedAt': FieldValue.serverTimestamp(),
+              }, SetOptions(merge: true));
+            } catch (e, st) {
+              debugPrint(
+                'JoinRoom: could not save user room history: $e\n$st',
+              );
+            }
+          }());
         },
         child: Center(
           child: SingleChildScrollView(
@@ -134,7 +135,7 @@ class _JoinRoomPageState extends State<JoinRoomPage> {
                       const SizedBox(height: AppConstants.spacingLarge),
                       CustomButton(
                         text: 'Join Room',
-                        isLoading: false,
+                        isLoading: state.isValidating,
                         onPressed: state.canSubmit ? _submit : null,
                         backgroundColor: theme.colorScheme.primary,
                       ),

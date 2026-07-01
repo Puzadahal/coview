@@ -272,20 +272,18 @@ class _RoomShareDialogState extends State<_RoomShareDialog> {
   }
 
   Future<void> _systemShare() async {
+    final body = widget.shareBody;
+    final subject = 'Join my Coview room: ${widget.roomName}';
+    if (mounted) Navigator.pop(context);
     try {
       await SharePlus.instance.share(
         ShareParams(
-          text: widget.shareBody,
-          subject: 'Join my Coview room: ${widget.roomName}',
+          text: body,
+          subject: subject,
         ),
       );
     } catch (_) {
-      await Clipboard.setData(ClipboardData(text: widget.shareBody));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invite copied to clipboard.')),
-        );
-      }
+      await Clipboard.setData(ClipboardData(text: body));
     }
   }
 
