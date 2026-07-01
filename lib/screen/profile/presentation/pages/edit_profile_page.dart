@@ -1,15 +1,17 @@
-import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
-import 'package:firebase_storage/firebase_storage.dart' as fs;
+import 'package:firebase_storage/firebase_storage.dart' show FirebaseException;
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../config/colors/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/storage/storage_upload_service.dart';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
@@ -23,8 +25,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _bioController = TextEditingController();
   final _syncIntervalController = TextEditingController(text: '60');
   String? _currentPhotoUrl;
+  PlatformFile? _selectedPhotoFile;
   Uint8List? _selectedPhotoBytes;
-  String? _selectedPhotoExtension;
   bool _loading = true;
   bool _saving = false;
   bool _autoSyncEnabled = true;
@@ -151,45 +153,36 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final result = await FilePicker.pickFiles(
       type: FileType.image,
       allowMultiple: false,
-      withData: true,
+      withData: kIsWeb,
     );
     if (result == null || result.files.isEmpty) return;
 
     final file = result.files.single;
-    final bytes = file.bytes;
-    if (bytes == null) {
+    final hasPath = !kIsWeb && file.path != null && file.path!.trim().isNotEmpty;
+    final hasBytes = file.bytes != null && file.bytes!.isNotEmpty;
+    if (!hasPath && !hasBytes) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not read selected image.')),
+        const SnackBar(
+          content: Text('Could not read selected image. Try another photo.'),
+        ),
       );
       return;
     }
 
     setState(() {
-      _selectedPhotoBytes = bytes;
-      _selectedPhotoExtension = file.extension;
+      _selectedPhotoFile = file;
+      _selectedPhotoBytes = file.bytes;
     });
   }
 
   Future<String?> _uploadProfilePhoto(fb.User user) async {
-    final bytes = _selectedPhotoBytes;
-    if (bytes == null) {
+    final file = _selectedPhotoFile;
+    if (file == null) {
       return _currentPhotoUrl;
     }
 
-    final extension = _safeImageExtension(_selectedPhotoExtension);
-    final ref = fs.FirebaseStorage.instance
-        .ref()
-        .child('profile_photos')
-        .child(user.uid)
-        .child('avatar_${DateTime.now().millisecondsSinceEpoch}.$extension');
-
-    final upload = await ref.putData(
-      bytes,
-      fs.SettableMetadata(contentType: _contentTypeForExtension(extension)),
-    );
-
-    return upload.ref.getDownloadURL();
+    return StorageUploadService().uploadProfilePhoto(file);
   }
 
   Future<void> _saveProfile() async {
@@ -203,7 +196,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
           (int.tryParse(_syncIntervalController.text.trim()) ?? 60)
               .clamp(15, 86400)
               .toInt();
-      final uploadedPhotoUrl = _selectedPhotoBytes == null
+      final uploadedPhotoUrl = _selectedPhotoFile == null
           ? _currentPhotoUrl
           : await _uploadProfilePhoto(user);
 
@@ -262,6 +255,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       if (!mounted) return;
       setState(() {
         _currentPhotoUrl = uploadedPhotoUrl;
+        _selectedPhotoFile = null;
         _selectedPhotoBytes = null;
         _profileVersion = nextProfileVersion;
         _syncIntervalController.text = syncIntervalSeconds.toString();
@@ -274,6 +268,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message ?? 'Failed to update profile.')),
+      );
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            StorageUploadService.friendlyMessage(e),
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -289,29 +292,19 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final selectedBytes = _selectedPhotoBytes;
     if (selectedBytes != null) return MemoryImage(selectedBytes);
 
+    final selectedPath = _selectedPhotoFile?.path;
+    if (!kIsWeb &&
+        selectedPath != null &&
+        selectedPath.trim().isNotEmpty) {
+      return FileImage(File(selectedPath));
+    }
+
     final photoUrl = _currentPhotoUrl?.trim();
     if (photoUrl != null && photoUrl.isNotEmpty) {
       return NetworkImage(photoUrl);
     }
 
     return null;
-  }
-
-  String _safeImageExtension(String? extension) {
-    final value = extension?.toLowerCase().replaceFirst('.', '') ?? '';
-    return switch (value) {
-      'jpg' || 'jpeg' || 'png' || 'webp' => value,
-      _ => 'jpg',
-    };
-  }
-
-  String _contentTypeForExtension(String extension) {
-    return switch (extension) {
-      'png' => 'image/png',
-      'webp' => 'image/webp',
-      'jpeg' || 'jpg' => 'image/jpeg',
-      _ => 'image/jpeg',
-    };
   }
 
   @override

@@ -31,6 +31,36 @@ class StorageUploadService {
     return user;
   }
 
+  Future<String> uploadProfilePhoto(
+    PlatformFile file, {
+    String? extension,
+  }) async {
+    final user = await ensureAuthenticatedUser();
+
+    final ext = _safeImageExtension(extension ?? file.extension);
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final storagePath = 'profile_photos/${user.uid}/avatar_$timestamp.$ext';
+
+    final metadata = SettableMetadata(
+      contentType: _imageContentType(ext),
+    );
+
+    final ref = _storage.ref().child(storagePath);
+    final task = _startUpload(ref, file, metadata);
+
+    try {
+      await task;
+      return ref.getDownloadURL();
+    } on FirebaseException catch (e) {
+      throw FirebaseException(
+        plugin: e.plugin,
+        code: e.code,
+        message: friendlyMessage(e),
+        stackTrace: e.stackTrace,
+      );
+    }
+  }
+
   Future<String> uploadRoomVideo(
     PlatformFile file, {
     UploadProgressCallback? onProgress,
@@ -94,7 +124,7 @@ class StorageUploadService {
       plugin: 'firebase_storage',
       code: 'invalid-argument',
       message:
-          'Could not read the selected video. Try a smaller file or paste a public URL.',
+          'Could not read the selected file. Try a smaller file or choose another.',
     );
   }
 
@@ -107,7 +137,7 @@ class StorageUploadService {
       case 'permission-denied':
         return 'Upload denied. Deploy storage rules: firebase deploy --only storage';
       case 'unauthenticated':
-        return 'Please sign in before uploading videos.';
+        return 'Please sign in before uploading.';
       case 'canceled':
         return 'Upload was cancelled.';
       case 'retry-limit-exceeded':
@@ -116,6 +146,33 @@ class StorageUploadService {
         return e.message?.isNotEmpty == true
             ? e.message!
             : 'Upload failed (${e.code}).';
+    }
+  }
+
+  String _imageContentType(String ext) {
+    switch (ext) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'jpeg':
+      case 'jpg':
+        return 'image/jpeg';
+      default:
+        return 'image/jpeg';
+    }
+  }
+
+  String _safeImageExtension(String? extension) {
+    final value = extension?.toLowerCase().replaceFirst('.', '') ?? '';
+    switch (value) {
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'webp':
+        return value;
+      default:
+        return 'jpg';
     }
   }
 
