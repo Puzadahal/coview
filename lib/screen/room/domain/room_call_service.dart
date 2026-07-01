@@ -32,7 +32,8 @@ class RoomCallService {
       StreamController<RoomCallConnectionState>.broadcast();
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _candidatesSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _answerSub;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _hostRenegotiationSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+  _hostRenegotiationSub;
   final Set<String> _appliedCandidateDocIds = <String>{};
   final List<RTCIceCandidate> _pendingRemoteCandidates = <RTCIceCandidate>[];
   bool _remoteDescriptionApplied = false;
@@ -123,10 +124,7 @@ class RoomCallService {
     return ready;
   }
 
-  Future<void> joinCall({
-    String? guestId,
-    String? guestName,
-  }) async {
+  Future<void> joinCall({String? guestId, String? guestName}) async {
     if (_disposed) return;
     _role = RoomCallRole.guest;
     _emitConnectionState(RoomCallConnectionState.connecting);
@@ -381,9 +379,9 @@ class RoomCallService {
       stream = event.streams.first;
     } else {
       _remoteStream ??= await createLocalMediaStream('remote');
-      final alreadyAdded = _remoteStream!
-          .getTracks()
-          .any((existing) => existing.id == track.id);
+      final alreadyAdded = _remoteStream!.getTracks().any(
+        (existing) => existing.id == track.id,
+      );
       if (!alreadyAdded) {
         await _remoteStream!.addTrack(track);
       }
@@ -474,10 +472,7 @@ class RoomCallService {
     }
   }
 
-  Future<void> _publishHostOffer({
-    String? hostId,
-    String? hostName,
-  }) async {
+  Future<void> _publishHostOffer({String? hostId, String? hostName}) async {
     _peerConnection!.onIceCandidate = (RTCIceCandidate candidate) {
       _publishCandidate('host', candidate);
     };
@@ -569,8 +564,9 @@ class RoomCallService {
             _appliedCandidateDocIds.clear();
             _pendingRemoteCandidates.clear();
 
-            final answer =
-                await _peerConnection!.createAnswer(_offerAnswerConstraints);
+            final answer = await _peerConnection!.createAnswer(
+              _offerAnswerConstraints,
+            );
             await _peerConnection!.setLocalDescription(answer);
             final local = await _localDescriptionWithCandidates();
 
@@ -754,13 +750,15 @@ class RoomCallService {
   }
 
   void toggleAudioMuted(bool muted) {
-    for (final track in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
+    for (final track
+        in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
       track.enabled = !muted;
     }
   }
 
   void toggleVideoMuted(bool muted) {
-    for (final track in _localStream?.getVideoTracks() ?? <MediaStreamTrack>[]) {
+    for (final track
+        in _localStream?.getVideoTracks() ?? <MediaStreamTrack>[]) {
       track.enabled = !muted;
     }
   }
@@ -772,7 +770,10 @@ class RoomCallService {
   }
 
   Future<void> _clearCallSignaling({required bool clearAll}) async {
-    final callRef = _firestore.collection('rooms').doc(roomId).collection('call');
+    final callRef = _firestore
+        .collection('rooms')
+        .doc(roomId)
+        .collection('call');
     await _deleteCandidates(callRef.doc('host'));
     await _deleteCandidates(callRef.doc('guest'));
     await callRef.doc('guest').delete();
