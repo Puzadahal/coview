@@ -127,11 +127,11 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
         .doc(peerDoc)
         .snapshots()
         .listen((doc) {
-      if (!mounted) return;
-      final name = doc.data()?['participantName'] as String?;
-      if (name == null || name.trim().isEmpty) return;
-      setState(() => _remoteParticipantName = name.trim());
-    });
+          if (!mounted) return;
+          final name = doc.data()?['participantName'] as String?;
+          if (name == null || name.trim().isEmpty) return;
+          setState(() => _remoteParticipantName = name.trim());
+        });
   }
 
   void _primeRemoteParticipantName(RoomState state, bool isRoomHost) {
@@ -145,12 +145,12 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
             .doc('invite')
             .get()
             .then((doc) {
-          if (!mounted) return;
-          final inviteName = doc.data()?['hostName'] as String?;
-          if (inviteName != null && inviteName.trim().isNotEmpty) {
-            setState(() => _remoteParticipantName = inviteName.trim());
-          }
-        }),
+              if (!mounted) return;
+              final inviteName = doc.data()?['hostName'] as String?;
+              if (inviteName != null && inviteName.trim().isNotEmpty) {
+                setState(() => _remoteParticipantName = inviteName.trim());
+              }
+            }),
       );
     }
     _listenForRemoteParticipantName(isRoomHost);
@@ -294,8 +294,9 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
         });
       });
 
-      _callConnectionSub =
-          _callService!.connectionStateUpdates.listen((callState) {
+      _callConnectionSub = _callService!.connectionStateUpdates.listen((
+        callState,
+      ) {
         if (!mounted) return;
         if (callState == RoomCallConnectionState.connected) {
           _cancelCallConnectWatchdog();
@@ -326,8 +327,8 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       final isRoomHost = uid != null && uid == state.hostId;
 
       if (isRoomHost) {
-        final hostName = fb.FirebaseAuth.instance.currentUser?.displayName ??
-            'Room host';
+        final hostName =
+            fb.FirebaseAuth.instance.currentUser?.displayName ?? 'Room host';
         _primeRemoteParticipantName(state, true);
         await _callService!.startCall(
           clearExisting: true,
@@ -354,10 +355,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
         }
         final guestName =
             fb.FirebaseAuth.instance.currentUser?.displayName ?? 'Guest';
-        await _callService!.joinCall(
-          guestId: uid,
-          guestName: guestName,
-        );
+        await _callService!.joinCall(guestId: uid, guestName: guestName);
       }
 
       if (!mounted) return;
@@ -442,29 +440,29 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
         .doc('invite')
         .snapshots()
         .listen((doc) {
-      if (!mounted) return;
-      final data = doc.data();
-      final active = data?['active'] == true;
-      final generation = data?['generation'] as int? ?? 0;
+          if (!mounted) return;
+          final data = doc.data();
+          final active = data?['active'] == true;
+          final generation = data?['generation'] as int? ?? 0;
 
-      if (!_incomingCallPrimed) {
-        _incomingCallPrimed = true;
-        _lastSeenCallGeneration = generation;
-        return;
-      }
+          if (!_incomingCallPrimed) {
+            _incomingCallPrimed = true;
+            _lastSeenCallGeneration = generation;
+            return;
+          }
 
-      if (!active || generation <= _lastSeenCallGeneration) {
-        if (!active) {
-          _lastSeenCallGeneration = 0;
-          _dismissCallSnackBars();
-        }
-        return;
-      }
-      if (_localCallStream != null || _isCallConnecting) return;
+          if (!active || generation <= _lastSeenCallGeneration) {
+            if (!active) {
+              _lastSeenCallGeneration = 0;
+              _dismissCallSnackBars();
+            }
+            return;
+          }
+          if (_localCallStream != null || _isCallConnecting) return;
 
-      _lastSeenCallGeneration = generation;
-      _showIncomingCallPrompt(state, data ?? {});
-    });
+          _lastSeenCallGeneration = generation;
+          _showIncomingCallPrompt(state, data ?? {});
+        });
   }
 
   void _showIncomingCallPrompt(RoomState state, Map<String, dynamic> data) {
@@ -534,10 +532,7 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
           content: Text(e.message),
           duration: const Duration(seconds: 5),
           action: e.permanentlyDenied
-              ? SnackBarAction(
-                  label: 'Settings',
-                  onPressed: openAppSettings,
-                )
+              ? SnackBarAction(label: 'Settings', onPressed: openAppSettings)
               : null,
         ),
       );
@@ -1013,216 +1008,218 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       body: Stack(
         children: [
           Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDark
-                ? const [
-                    Color(0xFF1A0B2E),
-                    Color(0xFF16213E),
-                    Color(0xFF0F3460),
-                  ]
-                : const [Color(0xFFE6E9FF), Color(0xFFF5F7FF)],
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: videoOnly
-                ? EdgeInsets.zero
-                : const EdgeInsets.all(AppConstants.spacingMedium),
-            child: BlocListener<RoomBloc, RoomState>(
-              listenWhen: (p, c) =>
-                  c.status != p.status ||
-                  c.videoUrl != p.videoUrl ||
-                  c.actionMessage != p.actionMessage ||
-                  c.roomDeleted != p.roomDeleted ||
-                  c.playbackVersion != p.playbackVersion ||
-                  c.isPlaying != p.isPlaying ||
-                  c.playbackPositionSeconds != p.playbackPositionSeconds ||
-                  c.playbackAnchorServerTimeMs != p.playbackAnchorServerTimeMs,
-              listener: (context, state) {
-                if (state.actionMessage != null &&
-                    state.actionMessage!.trim().isNotEmpty) {
-                  final isModeration = state.actionMessage!.contains('filtered') ||
-                      state.actionMessage!.contains('blocked') ||
-                      state.actionMessage!.contains('Report');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(state.actionMessage!),
-                      backgroundColor: isModeration
-                          ? Colors.orange.shade800
-                          : null,
-                      duration: Duration(seconds: isModeration ? 4 : 3),
-                    ),
-                  );
-                  context.read<RoomBloc>().add(
-                    const RoomActionMessageConsumed(),
-                  );
-                }
-                if (state.roomDeleted) {
-                  context.go('/home');
-                  return;
-                }
-                if (state.messages.length > _lastKnownMessageCount &&
-                    _notifyRecentMessages &&
-                    state.messages.isNotEmpty) {
-                  final latest = state.messages.last;
-                  final myUid = fb.FirebaseAuth.instance.currentUser?.uid;
-                  final isMyMessage = myUid != null && myUid == latest.authorId;
-                  if (!isMyMessage) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('${latest.author}: ${latest.text}'),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                }
-                _lastKnownMessageCount = state.messages.length;
-                final cameFromLoading =
-                    _listenerPrevStatus == RoomStatus.loading &&
-                    state.status == RoomStatus.viewing;
-                _listenerPrevStatus = state.status;
-                if (state.status != RoomStatus.viewing) return;
-                if (cameFromLoading) {
-                  _listenForIncomingCall(state);
-                }
-                unawaited(_preparePlaybackSource(state.videoUrl));
-                final force = cameFromLoading;
-                unawaited(_applyPlaybackFromFirestore(state, force: force));
-              },
-              child: BlocBuilder<RoomBloc, RoomState>(
-                builder: (context, state) {
-                  if (state.status == RoomStatus.loading) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  if (state.status == RoomStatus.error) {
-                    return Center(
-                      child: Text(
-                        state.error ?? 'Failed to load room.',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: AppColors.error,
-                          fontWeight: FontWeight.w600,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: isDark
+                    ? const [
+                        Color(0xFF1A0B2E),
+                        Color(0xFF16213E),
+                        Color(0xFF0F3460),
+                      ]
+                    : const [Color(0xFFE6E9FF), Color(0xFFF5F7FF)],
+              ),
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding: videoOnly
+                    ? EdgeInsets.zero
+                    : const EdgeInsets.all(AppConstants.spacingMedium),
+                child: BlocListener<RoomBloc, RoomState>(
+                  listenWhen: (p, c) =>
+                      c.status != p.status ||
+                      c.videoUrl != p.videoUrl ||
+                      c.actionMessage != p.actionMessage ||
+                      c.roomDeleted != p.roomDeleted ||
+                      c.playbackVersion != p.playbackVersion ||
+                      c.isPlaying != p.isPlaying ||
+                      c.playbackPositionSeconds != p.playbackPositionSeconds ||
+                      c.playbackAnchorServerTimeMs !=
+                          p.playbackAnchorServerTimeMs,
+                  listener: (context, state) {
+                    if (state.actionMessage != null &&
+                        state.actionMessage!.trim().isNotEmpty) {
+                      final isModeration =
+                          state.actionMessage!.contains('filtered') ||
+                          state.actionMessage!.contains('blocked') ||
+                          state.actionMessage!.contains('Report');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(state.actionMessage!),
+                          backgroundColor: isModeration
+                              ? Colors.orange.shade800
+                              : null,
+                          duration: Duration(seconds: isModeration ? 4 : 3),
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                    );
-                  }
-
-                  if (_videoOnlyLayout) {
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Positioned.fill(
-                          child: Padding(
-                            padding: const EdgeInsets.all(4),
-                            child: _buildVideoPane(
-                              theme,
-                              isDark,
-                              state,
-                              immersive: true,
-                            ),
+                      );
+                      context.read<RoomBloc>().add(
+                        const RoomActionMessageConsumed(),
+                      );
+                    }
+                    if (state.roomDeleted) {
+                      context.go('/home');
+                      return;
+                    }
+                    if (state.messages.length > _lastKnownMessageCount &&
+                        _notifyRecentMessages &&
+                        state.messages.isNotEmpty) {
+                      final latest = state.messages.last;
+                      final myUid = fb.FirebaseAuth.instance.currentUser?.uid;
+                      final isMyMessage =
+                          myUid != null && myUid == latest.authorId;
+                      if (!isMyMessage) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('${latest.author}: ${latest.text}'),
+                            duration: const Duration(seconds: 2),
                           ),
-                        ),
-                        Positioned(
-                          top: 4,
-                          left: 4,
-                          right: 4,
-                          child: SafeArea(
-                            bottom: false,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                IconButton(
-                                  tooltip: 'Exit fullscreen',
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: Colors.black.withValues(
-                                      alpha: 0.45,
-                                    ),
-                                  ),
-                                  onPressed: () =>
-                                      unawaited(_handleRoomBack(context)),
-                                  icon: const Icon(
-                                    Icons.fullscreen_exit,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                IconButton(
-                                  tooltip: 'Invite friends',
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: Colors.black.withValues(
-                                      alpha: 0.45,
-                                    ),
-                                  ),
-                                  onPressed: () =>
-                                      unawaited(_inviteFriends(context)),
-                                  icon: const Icon(
-                                    Icons.ios_share,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  }
+                        );
+                      }
+                    }
+                    _lastKnownMessageCount = state.messages.length;
+                    final cameFromLoading =
+                        _listenerPrevStatus == RoomStatus.loading &&
+                        state.status == RoomStatus.viewing;
+                    _listenerPrevStatus = state.status;
+                    if (state.status != RoomStatus.viewing) return;
+                    if (cameFromLoading) {
+                      _listenForIncomingCall(state);
+                    }
+                    unawaited(_preparePlaybackSource(state.videoUrl));
+                    final force = cameFromLoading;
+                    unawaited(_applyPlaybackFromFirestore(state, force: force));
+                  },
+                  child: BlocBuilder<RoomBloc, RoomState>(
+                    builder: (context, state) {
+                      if (state.status == RoomStatus.loading) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                  final content = isWide
-                      ? Row(
+                      if (state.status == RoomStatus.error) {
+                        return Center(
+                          child: Text(
+                            state.error ?? 'Failed to load room.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: AppColors.error,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        );
+                      }
+
+                      if (_videoOnlyLayout) {
+                        return Stack(
+                          fit: StackFit.expand,
                           children: [
-                            Expanded(
-                              flex: 5,
-                              child: _buildVideoPane(theme, isDark, state),
-                            ),
-                            const SizedBox(width: AppConstants.spacingMedium),
-                            Expanded(
-                              flex: 2,
-                              child: _buildChatPane(
-                                theme,
-                                isDark,
-                                textChatEnabled: state.textChatEnabled,
-                                compactInput: false,
+                            Positioned.fill(
+                              child: Padding(
+                                padding: const EdgeInsets.all(4),
+                                child: _buildVideoPane(
+                                  theme,
+                                  isDark,
+                                  state,
+                                  immersive: true,
+                                ),
                               ),
                             ),
-                          ],
-                        )
-                      : Column(
-                          children: [
-                            Expanded(
-                              flex: 5,
-                              child: _buildVideoPane(theme, isDark, state),
-                            ),
-                            const SizedBox(height: AppConstants.spacingMedium),
-                            Expanded(
-                              flex: 3,
-                              child: _buildChatPane(
-                                theme,
-                                isDark,
-                                textChatEnabled: state.textChatEnabled,
-                                compactInput:
-                                    MediaQuery.orientationOf(context) ==
-                                        Orientation.landscape &&
-                                    MediaQuery.sizeOf(context).height < 520,
+                            Positioned(
+                              top: 4,
+                              left: 4,
+                              right: 4,
+                              child: SafeArea(
+                                bottom: false,
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    IconButton(
+                                      tooltip: 'Exit fullscreen',
+                                      style: IconButton.styleFrom(
+                                        backgroundColor: Colors.black
+                                            .withValues(alpha: 0.45),
+                                      ),
+                                      onPressed: () =>
+                                          unawaited(_handleRoomBack(context)),
+                                      icon: const Icon(
+                                        Icons.fullscreen_exit,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Invite friends',
+                                      style: IconButton.styleFrom(
+                                        backgroundColor: Colors.black
+                                            .withValues(alpha: 0.45),
+                                      ),
+                                      onPressed: () =>
+                                          unawaited(_inviteFriends(context)),
+                                      icon: const Icon(
+                                        Icons.ios_share,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
                         );
+                      }
 
-                  return Stack(
-                    children: [
-                      content,
-                    ],
-                  );
-                },
+                      final content = isWide
+                          ? Row(
+                              children: [
+                                Expanded(
+                                  flex: 5,
+                                  child: _buildVideoPane(theme, isDark, state),
+                                ),
+                                const SizedBox(
+                                  width: AppConstants.spacingMedium,
+                                ),
+                                Expanded(
+                                  flex: 2,
+                                  child: _buildChatPane(
+                                    theme,
+                                    isDark,
+                                    textChatEnabled: state.textChatEnabled,
+                                    compactInput: false,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                Expanded(
+                                  flex: 5,
+                                  child: _buildVideoPane(theme, isDark, state),
+                                ),
+                                const SizedBox(
+                                  height: AppConstants.spacingMedium,
+                                ),
+                                Expanded(
+                                  flex: 3,
+                                  child: _buildChatPane(
+                                    theme,
+                                    isDark,
+                                    textChatEnabled: state.textChatEnabled,
+                                    compactInput:
+                                        MediaQuery.orientationOf(context) ==
+                                            Orientation.landscape &&
+                                        MediaQuery.sizeOf(context).height < 520,
+                                  ),
+                                ),
+                              ],
+                            );
+
+                      return Stack(children: [content]);
+                    },
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
         ],
       ),
     );
@@ -1576,10 +1573,10 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
                       tooltip: _isCallConnecting
                           ? 'Connecting call…'
                           : (_localCallStream != null
-                              ? (_videoBubbleVisible
-                                  ? 'Hide call bubbles'
-                                  : 'Show call bubbles')
-                              : 'Start video call'),
+                                ? (_videoBubbleVisible
+                                      ? 'Hide call bubbles'
+                                      : 'Show call bubbles')
+                                : 'Start video call'),
                       onPressed: _isCallConnecting
                           ? null
                           : () => unawaited(_toggleCallBubble(state)),
@@ -1636,7 +1633,8 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
       builder: (context, roomState) {
         final uid = fb.FirebaseAuth.instance.currentUser?.uid;
         final isRoomHost = uid != null && uid == roomState.hostId;
-        final callBubblesActive = _localCallStream != null &&
+        final callBubblesActive =
+            _localCallStream != null &&
             _videoBubbleVisible &&
             _renderersInitialized;
 
@@ -1644,147 +1642,152 @@ class _RoomPageState extends State<RoomPage> with WidgetsBindingObserver {
           clipBehavior: Clip.none,
           children: [
             Container(
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.primaryDarkVariant : AppColors.lightSurface,
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
-            border: Border.all(
-              color: theme.colorScheme.primary.withValues(alpha: 0.2),
-            ),
-          ),
-          child: Column(
-            children: [
-              Padding(
-                padding: headerPadding,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.chat_bubble_outline,
-                      color: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Room Chat',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    if (roomState.sensitiveWordsFilterEnabled) ...[
-                      const SizedBox(width: 6),
-                      Tooltip(
-                        message:
-                            'Chat moderation is on. Harmful words are filtered or blocked.',
-                        child: Icon(
-                          Icons.shield_outlined,
-                          size: 18,
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.85,
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.15,
-                          ),
-                          borderRadius: BorderRadius.circular(
-                            AppConstants.borderRadiusSmall,
-                          ),
-                        ),
-                        child: Text(
-                          'Live',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+              decoration: BoxDecoration(
+                color: isDark
+                    ? AppColors.primaryDarkVariant
+                    : AppColors.lightSurface,
+                borderRadius: BorderRadius.circular(
+                  AppConstants.borderRadiusLarge,
+                ),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.2),
                 ),
               ),
-              const Divider(height: 1),
-              Expanded(
-                child: BlocBuilder<RoomBloc, RoomState>(
-                  builder: (context, state) {
-                    final messages = state.messages;
-                    final maxBubbleW = MediaQuery.sizeOf(context).width * 0.85;
-                    final myUid = fb.FirebaseAuth.instance.currentUser?.uid;
-                    return ListView.builder(
-                      padding: listPadding,
-                      itemCount: messages.length,
-                      itemBuilder: (context, index) {
-                        final message = messages[index];
-                        final isMe =
-                            myUid != null && myUid == message.authorId;
-                        return ChatMessageBubble(
-                          message: message,
-                          isMe: isMe,
-                          maxWidth: maxBubbleW,
-                          onReport: isMe ? null : _reportMessage,
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-              const Divider(height: 1),
-              Padding(
-                padding: const EdgeInsets.all(AppConstants.spacingSmall),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _messageController,
-                        enabled: textChatEnabled,
-                        minLines: 1,
-                        maxLines: compactInput ? 1 : 3,
-                        decoration: InputDecoration(
-                          hintText: textChatEnabled
-                              ? 'Say something to the room...'
-                              : 'Chat disabled by host',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(
-                              AppConstants.borderRadiusLarge,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: headerPadding,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.chat_bubble_outline,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Room Chat',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: AppConstants.spacingMedium,
-                            vertical: AppConstants.spacingSmall,
+                        ),
+                        if (roomState.sensitiveWordsFilterEnabled) ...[
+                          const SizedBox(width: 6),
+                          Tooltip(
+                            message:
+                                'Chat moderation is on. Harmful words are filtered or blocked.',
+                            child: Icon(
+                              Icons.shield_outlined,
+                              size: 18,
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: 0.85,
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: 0.15,
+                              ),
+                              borderRadius: BorderRadius.circular(
+                                AppConstants.borderRadiusSmall,
+                              ),
+                            ),
+                            child: Text(
+                              'Live',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
                         ),
-                        onSubmitted: (_) => _sendMessage(),
-                      ),
+                      ],
                     ),
-                    const SizedBox(width: AppConstants.spacingSmall),
-                    CircleAvatar(
-                      backgroundColor: theme.colorScheme.primary,
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.send,
-                          color: AppColors.textWhite,
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: BlocBuilder<RoomBloc, RoomState>(
+                      builder: (context, state) {
+                        final messages = state.messages;
+                        final maxBubbleW =
+                            MediaQuery.sizeOf(context).width * 0.85;
+                        final myUid = fb.FirebaseAuth.instance.currentUser?.uid;
+                        return ListView.builder(
+                          padding: listPadding,
+                          itemCount: messages.length,
+                          itemBuilder: (context, index) {
+                            final message = messages[index];
+                            final isMe =
+                                myUid != null && myUid == message.authorId;
+                            return ChatMessageBubble(
+                              message: message,
+                              isMe: isMe,
+                              maxWidth: maxBubbleW,
+                              onReport: isMe ? null : _reportMessage,
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.all(AppConstants.spacingSmall),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _messageController,
+                            enabled: textChatEnabled,
+                            minLines: 1,
+                            maxLines: compactInput ? 1 : 3,
+                            decoration: InputDecoration(
+                              hintText: textChatEnabled
+                                  ? 'Say something to the room...'
+                                  : 'Chat disabled by host',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppConstants.borderRadiusLarge,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: AppConstants.spacingMedium,
+                                vertical: AppConstants.spacingSmall,
+                              ),
+                            ),
+                            onSubmitted: (_) => _sendMessage(),
+                          ),
                         ),
-                        onPressed: textChatEnabled ? _sendMessage : null,
-                      ),
+                        const SizedBox(width: AppConstants.spacingSmall),
+                        CircleAvatar(
+                          backgroundColor: theme.colorScheme.primary,
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.send,
+                              color: AppColors.textWhite,
+                            ),
+                            onPressed: textChatEnabled ? _sendMessage : null,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
             if (callBubblesActive)
               Positioned(
                 top: _remoteBubbleOffset.dy,
