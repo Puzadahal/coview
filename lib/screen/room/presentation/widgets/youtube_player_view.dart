@@ -10,11 +10,11 @@ import '../../../../config/colors/app_colors.dart';
 class YoutubePlayerView extends StatefulWidget {
   final String videoUrl;
 
-  /// When the native player enters/exits fullscreen (in-player control), parent
-  /// can hide chat and use a video-only layout.
+  //When the native player enters/exits fullscreen (in-player control), parent
+  // can hide chat and use a video-only layout.
   final ValueChanged<bool>? onFullscreenChanged;
 
-  /// Square corners when embedded in an edge-to-edge immersive layout.
+  // Square corners when embedded in an edge-to-edge immersive layout.
   final bool immersiveLayout;
 
   const YoutubePlayerView({
@@ -148,11 +148,11 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
     return pos.inMilliseconds / 1000.0;
   }
 
-  /// True while the native player is in fullscreen (user tapped fullscreen).
+  // True while the native player is in fullscreen (user tapped fullscreen).
   bool get isYoutubeFullscreen =>
       !kIsWeb && (_mobileController?.value.isFullScreen ?? false);
 
-  /// Leave fullscreen and restore normal orientations without leaving the room.
+  // Leave fullscreen and restore normal orientations without leaving the room.
   Future<void> exitYoutubeFullscreen() async {
     if (kIsWeb) return;
     final c = _mobileController;
@@ -179,7 +179,7 @@ class YoutubePlayerViewState extends State<YoutubePlayerView> {
     } catch (_) {}
   }
 
-  /// YouTube IFrame API error codes 
+  // YouTube IFrame API error codes 
   static String _embedErrorExplanation(int code) {
     switch (code) {
       case 1:

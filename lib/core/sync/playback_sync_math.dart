@@ -31,7 +31,7 @@ class PlaybackSyncMath {
     const hardSeek = 2.0;
     const softBand = 0.35;
     
-    if (ad <= softBand)  return const DriftDecision.none();//If difference is tiny => do nothing.
+    if (ad <= softBand)  return const DriftDecision.none();//If difference is tiny => ignore .
    
     if (ad >= hardSeek) {
       return DriftDecision.hardSeek(expectedSeconds);
