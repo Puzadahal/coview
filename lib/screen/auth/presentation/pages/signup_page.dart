@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -108,6 +110,13 @@ class _SignupPageContentState extends State<_SignupPageContent> {
   Widget build(BuildContext context) {
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final size = MediaQuery.sizeOf(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final labelColor = isDark
+        ? AppColors.textWhite.withValues(alpha: 0.95)
+        : AppColors.textDark;
+    final subtleTextColor = isDark
+        ? AppColors.textWhite.withValues(alpha: 0.8)
+        : AppColors.textDark.withValues(alpha: 0.75);
 
     return SizedBox(
       width: size.width,
@@ -166,7 +175,9 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                           'Create your account',
                           style: TextStyle(
                             fontSize: 16,
-                            color: AppColors.textWhite.withValues(alpha: 0.85),
+                            color: isDark
+                                ? AppColors.textWhite.withValues(alpha: 0.85)
+                                : AppColors.textDark.withValues(alpha: 0.8),
                             letterSpacing: 0.5,
                           ),
                         ),
@@ -186,9 +197,7 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                               label: 'Name',
                               hintText: 'Enter your name',
                               keyboardType: TextInputType.name,
-                              labelColor: AppColors.textWhite.withValues(
-                                alpha: 0.95,
-                              ),
+                              labelColor: labelColor,
                               onChanged: (value) {
                                 context.read<SignupBloc>().add(
                                   SignupNameChanged(value),
@@ -206,9 +215,7 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                                   focusNode: _emailFocusNode,
                                   emailValue: state.email,
                                   isEmailValid: state.isEmailValid,
-                                  labelColor: AppColors.textWhite.withValues(
-                                    alpha: 0.95,
-                                  ),
+                                  labelColor: labelColor,
                                   onChanged: (value) {
                                     context.read<SignupBloc>().add(
                                       SignupEmailChanged(value),
@@ -221,9 +228,7 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                             SignupPasswordTextField(
                               controller: _passwordController,
                               focusNode: _passwordFocusNode,
-                              labelColor: AppColors.textWhite.withValues(
-                                alpha: 0.95,
-                              ),
+                              labelColor: labelColor,
                               onChanged: (value) {
                                 context.read<SignupBloc>().add(
                                   SignupPasswordChanged(value),
@@ -235,9 +240,7 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                               controller: _confirmPasswordController,
                               focusNode: _confirmPasswordFocusNode,
                               isConfirmPassword: true,
-                              labelColor: AppColors.textWhite.withValues(
-                                alpha: 0.95,
-                              ),
+                              labelColor: labelColor,
                               onChanged: (value) {
                                 context.read<SignupBloc>().add(
                                   SignupConfirmPasswordChanged(value),
@@ -300,18 +303,23 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                                             if (states.contains(
                                               MaterialState.selected,
                                             )) {
-                                              return AppColors.primaryDark;
+                                              return AppColors.primaryAccent;
                                             }
-                                            return AppColors.textWhite
-                                                .withValues(alpha: 0.4);
+                                            return isDark
+                                                ? AppColors.textWhite
+                                                    .withValues(alpha: 0.4)
+                                                : Colors.transparent;
                                           }),
                                       checkColor: MaterialStateProperty.all(
                                         AppColors.textWhite,
                                       ),
                                       side: BorderSide(
-                                        color: AppColors.textWhite.withValues(
-                                          alpha: 0.8,
-                                        ),
+                                        color: isDark
+                                            ? AppColors.textWhite.withValues(
+                                                alpha: 0.8,
+                                              )
+                                            : AppColors.primaryAccent
+                                                .withValues(alpha: 0.7),
                                         width: 2,
                                       ),
                                       shape: RoundedRectangleBorder(
@@ -334,11 +342,14 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                                               ),
                                             );
                                           },
-                                          activeColor: AppColors.primaryDark,
+                                          activeColor: AppColors.primaryAccent,
                                           checkColor: AppColors.textWhite,
                                           side: BorderSide(
-                                            color: AppColors.textWhite
-                                                .withValues(alpha: 0.8),
+                                            color: isDark
+                                                ? AppColors.textWhite
+                                                    .withValues(alpha: 0.8)
+                                                : AppColors.primaryAccent
+                                                    .withValues(alpha: 0.7),
                                             width: 2,
                                           ),
                                         ),
@@ -350,8 +361,7 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                                               TextSpan(
                                                 style: TextStyle(
                                                   fontSize: 13,
-                                                  color: AppColors.textWhite
-                                                      .withValues(alpha: 0.95),
+                                                  color: labelColor,
                                                 ),
                                                 children: [
                                                   const TextSpan(
@@ -458,23 +468,23 @@ class _SignupPageContentState extends State<_SignupPageContent> {
                                 Text(
                                   'Already have an account? ',
                                   style: TextStyle(
-                                    color: AppColors.textWhite.withValues(
-                                      alpha: 0.8,
-                                    ),
+                                    color: subtleTextColor,
                                     fontSize: 14,
                                   ),
                                 ),
                                 GestureDetector(
                                   onTap: () => context.go('/login'),
-                                  child: const Padding(
-                                    padding: EdgeInsets.symmetric(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
                                       vertical: 8,
                                       horizontal: 4,
                                     ),
                                     child: Text(
                                       'Login',
                                       style: TextStyle(
-                                        color: AppColors.textWhite,
+                                        color: isDark
+                                            ? AppColors.textWhite
+                                            : AppColors.primaryAccent,
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
                                       ),

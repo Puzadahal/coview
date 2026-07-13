@@ -40,5 +40,8 @@
   "how2_title": "Share invite link",
   "how2_body": "Friends join instantly from browser.",
   "how3_title": "Stream + chat live",
-  "how3_body": "Watch together and talk in real time."
+  "how3_body": "Watch together and talk in real time.",
+  "noInternetTitle": "No internet connection",
+  "noInternetMessage": "Please check your internet connection and try again",
+  "tryAgain": "TRY AGAIN"
 }

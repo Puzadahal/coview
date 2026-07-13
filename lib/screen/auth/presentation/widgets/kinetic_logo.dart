@@ -49,6 +49,12 @@ class _KineticLogoState extends State<KineticLogo>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? AppColors.textWhite : AppColors.primaryAccent;
+    final glowColor = isDark
+        ? Colors.white.withValues(alpha: 0.5)
+        : AppColors.primaryAccent.withValues(alpha: 0.35);
+
     return AnimatedBuilder(
       animation: _pulseAnimation,
       builder: (context, child) {
@@ -60,10 +66,10 @@ class _KineticLogoState extends State<KineticLogo>
               fontSize: AppConstants.fontSizeXXLarge + 8,
               fontWeight: FontWeight.bold,
               letterSpacing: 2,
-              color: AppColors.textWhite,
+              color: textColor,
               shadows: [
                 Shadow(
-                  color: Colors.white.withOpacity(0.5),
+                  color: glowColor,
                   blurRadius: _pulseAnimation.value * 10,
                 ),
               ],
