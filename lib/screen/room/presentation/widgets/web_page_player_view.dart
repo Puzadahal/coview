@@ -24,7 +24,6 @@ class WebPagePlayerView extends StatefulWidget {
 class WebPagePlayerViewState extends State<WebPagePlayerView> {
   InAppWebViewController? _controller;
   bool _pageLoaded = false;
-  bool _videoDetected = false;
 
   static const _videoProbeJs = '''
 (function() {
@@ -88,25 +87,6 @@ class WebPagePlayerViewState extends State<WebPagePlayerView> {
               child: CircularProgressIndicator(color: AppColors.secondary),
             ),
           ),
-        if (_pageLoaded && !_videoDetected)
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              width: double.infinity,
-              margin: const EdgeInsets.all(12),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.72),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Text(
-                'Page loaded. Sync works when the site uses a standard HTML5 video player. '
-                'Tap play on the page if needed.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white, fontSize: 12),
-              ),
-            ),
-          ),
       ],
     );
   }
@@ -115,9 +95,7 @@ class WebPagePlayerViewState extends State<WebPagePlayerView> {
     final raw = await _controller?.evaluateJavascript(source: _videoProbeJs);
     final parsed = _decodeJson(raw);
     if (!mounted) return;
-    final found = parsed?['found'] == true;
-    setState(() => _videoDetected = found);
-    if (found) widget.onVideoReady?.call();
+    if (parsed?['found'] == true) widget.onVideoReady?.call();
   }
 
   Map<String, dynamic>? _decodeJson(Object? raw) {

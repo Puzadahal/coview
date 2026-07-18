@@ -51,6 +51,7 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
   ) async {
     emit(state.copyWith(status: RoomStatus.loading, error: null));
 
+//Load room data from Firestore +anonymous sign-in if needed for playback sync. Then subscribe to messages and playback state.
     try {
       final doc = await _firestore.collection('rooms').doc(state.roomId).get();
 
@@ -114,6 +115,7 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
         }
       }
 
+//Live Chat listener
       _messagesSub?.cancel();
       _messagesSub = _firestore
           .collection('rooms')
@@ -147,6 +149,8 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
             },
           );
 
+
+//playback state listener
       _playbackSub?.cancel();
       if (playbackSyncEnabled) {
         _playbackSub = _firestore
@@ -223,7 +227,7 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
     final displayName = (user.displayName?.trim().isNotEmpty ?? false)
         ? user.displayName!.trim()
         : (user.email ?? 'User');
-
+//host writes playback when play/pause/seek, and writes to messages when sending chat. Other participants write to messages when sending chat, but do not write playback state (to avoid conflicts). All participants read both messages and playback state.
     try {
       await _firestore
           .collection('rooms')
@@ -231,10 +235,10 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
           .collection('participants')
           .doc(user.uid)
           .set({
-        'uid': user.uid,
-        'displayName': displayName,
-        'lastSeenAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+            'uid': user.uid,
+            'displayName': displayName,
+            'lastSeenAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
 
       final isHost = hostId != null && hostId == user.uid;
       await _firestore
@@ -243,12 +247,12 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
           .collection('rooms')
           .doc(roomId)
           .set({
-        'roomId': roomId,
-        'name': roomName,
-        'videoUrl': videoUrl ?? '',
-        'isHost': isHost,
-        'lastJoinedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+            'roomId': roomId,
+            'name': roomName,
+            'videoUrl': videoUrl ?? '',
+            'isHost': isHost,
+            'lastJoinedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
     } catch (e, st) {
       debugPrint('RoomBloc: participant registration failed: $e\n$st');
     }
@@ -316,9 +320,10 @@ class RoomBloc extends Bloc<RoomEvent, RoomState> {
       return;
     }
 
-    if (event.reportedAuthorId != null &&
-        event.reportedAuthorId == user.uid) {
-      emit(state.copyWith(actionMessage: 'You cannot report your own message.'));
+    if (event.reportedAuthorId != null && event.reportedAuthorId == user.uid) {
+      emit(
+        state.copyWith(actionMessage: 'You cannot report your own message.'),
+      );
       return;
     }
 
